@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Swapper Africa</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+<header>
+
+<div class="logo">
+<h1>Swapper Africa</h1>
+</div>
+
+<nav>
+<a href="../index.html">Home</a>
+<a href="pages/swap.html">Swap</a>
+<a href="pages/wallet.html">Wallet</a>
+<a href="pages/dashboard.html">Dashboard</a>
+</nav>
+
+<div class="nav-buttons">
+<button class="connect-btn">Connect Wallet</button>
+</div>
+
+</header>
+
+
+<section class="hero">
+
+<div class="hero-text">
+<h2>Swap Crypto Across Africa</h2>
+
+<p>
+Fast, secure and simple cryptocurrency exchange with wallet connection or direct deposits.
+</p>
+
+<button>Start Swapping</button>
+</div>
+
+<div class="swap-card">
+
+<h3>Quick Swap</h3>
+
+<label>From</label>
+
+<select id="fromCoin">
+<option>BTC</option>
+<option>ETH</option>
+<option>USDT</option>
+<option>SOL</option>
+</select>
+
+<input
+type="number"
+id="amount"
+placeholder="Enter amount"
+>
+
+<label>To</label>
+
+<select id="toCoin">
+<option>USDT</option>
+<option>BTC</option>
+<option>ETH</option>
+<option>SOL</option>
+</select>
+
+<button id="swapBtn">
+Preview Swap
+</button>
+
+<p id="swapResult"></p>
+
+<hr>
+
+<h3>Choose Swap Method</h3>
+
+<div class="swap-methods">
+
+<button id="connectWalletBtn">
+Connect Wallet
+</button>
+
+<button id="depositWalletBtn">
+Send to Swapper Wallet
+</button>
+
+</div>
+
+<p id="methodResult"></p>
+
+</div>
+
+</section>
+
+<div id="walletModal" class="modal">
+
+<div class="modal-content">
+
+<span id="closeModal">&times;</span>
+
+<h2>Connect Wallet</h2>
+
+<p>Select a wallet to continue.</p>
+
+<button class="wallet-option">
+MetaMask
+</button>
+
+<button class="wallet-option">
+Trust Wallet
+</button>
+
+<button class="wallet-option">
+Coinbase Wallet
+</button>
+
+<button class="wallet-option">
+WalletConnect
+</button>
+
+</div>
+
+</div>
+
+
+<script>
+
+const wallet =
+localStorage.getItem("connectedWallet");
+
+const status =
+localStorage.getItem("walletStatus");
+
+
+if(wallet){
+
+document.getElementById("walletStatus").textContent =
+wallet + " - " + status;
+
+}
+
+
+</script>
+
+<script src="js/script.js"></script>
+
+</body>
+</html>

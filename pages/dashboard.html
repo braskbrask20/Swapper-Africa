@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>Swapper Africa Dashboard</title>
+
+<link rel="stylesheet" href="../css/style.css">
+
+</head>
+
+
+<body>
+
+
+<header>
+
+<div class="logo">
+<h1>Swapper Africa</h1>
+</div>
+
+
+<nav>
+
+<a href="../index.html">Home</a>
+<a href="wallet.html">Wallet</a>
+<a href="dashboard.html">Dashboard</a>
+
+</nav>
+
+</header>
+
+
+
+
+<section class="dashboard">
+
+
+<h2>Dashboard</h2>
+
+
+
+<div class="cards">
+
+
+<div class="card">
+
+<h3>Total Balance</h3>
+
+<p id="totalBalance">
+$0
+</p>
+
+</div>
+
+
+
+<div class="card">
+
+<h3>Wallet Status</h3>
+
+<p id="walletStatus">
+Not Connected
+</p>
+
+</div>
+
+
+
+<div class="card">
+
+<h3>Total Swaps</h3>
+
+<p id="totalTransactions">
+0 Transactions
+</p>
+
+</div>
+
+
+
+</div>
+
+
+
+
+
+<div class="transactions">
+
+<h3>Recent Swaps</h3>
+
+
+<table>
+
+<tr>
+
+<th>ID</th>
+<th>From</th>
+<th>To</th>
+<th>Amount</th>
+<th>Received</th>
+<th>Status</th>
+<th>Date</th>
+
+</tr>
+
+
+<tbody id="transactionList">
+
+</tbody>
+
+
+</table>
+
+
+</div>
+
+
+</section>
+
+
+
+
+
+<script>
+
+
+const user =
+JSON.parse(localStorage.getItem("userData"));
+
+
+
+if(user){
+
+
+document.getElementById("totalTransactions").textContent =
+user.transactions.length + " Transactions";
+
+
+
+const list =
+document.getElementById("transactionList");
+
+
+
+user.transactions.forEach(item => {
+
+
+list.innerHTML += `
+
+<tr>
+
+<td>${item.id}</td>
+
+<td>${item.from}</td>
+
+<td>${item.to}</td>
+
+<td>${item.amount}</td>
+
+<td>${item.received}</td>
+
+<td>${item.status}</td>
+
+<td>${item.date}</td>
+
+</tr>
+
+`;
+
+
+});
+
+
+}
+
+
+
+
+const wallet =
+localStorage.getItem("connectedWallet");
+
+
+if(wallet){
+
+document.getElementById("walletStatus").textContent =
+wallet + " Connected";
+
+}
+
+
+</script>
+
+
+
+</body>
+
+</html>

@@ -1,0 +1,368 @@
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+}
+
+
+body{
+font-family:Arial, sans-serif;
+background:#f5f7fb;
+color:#222;
+}
+
+
+/* NAVIGATION */
+
+header{
+
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:20px 60px;
+background:white;
+box-shadow:0 3px 15px rgba(0,0,0,0.08);
+
+}
+
+
+.logo h1{
+
+color:#2563eb;
+
+}
+
+
+nav a{
+
+text-decoration:none;
+color:#333;
+margin:0 15px;
+font-weight:bold;
+
+}
+
+
+nav a:hover{
+
+color:#2563eb;
+
+}
+
+
+.connect-btn{
+
+background:#2563eb;
+color:white;
+border:none;
+padding:12px 22px;
+border-radius:8px;
+cursor:pointer;
+
+}
+
+
+
+/* HOME HERO */
+
+.hero{
+
+display:flex;
+justify-content:space-between;
+align-items:center;
+gap:50px;
+padding:100px 60px;
+
+}
+
+
+.hero-text{
+
+flex:1;
+
+}
+
+
+.hero-text h2{
+
+font-size:50px;
+margin-bottom:20px;
+
+}
+
+
+.hero-text p{
+
+font-size:20px;
+color:#666;
+line-height:1.6;
+margin-bottom:30px;
+
+}
+
+
+.swap-card{
+
+flex:1;
+background:white;
+padding:35px;
+border-radius:15px;
+box-shadow:0 10px 30px rgba(0,0,0,.08);
+
+}
+
+
+.swap-card select,
+.swap-card input{
+
+width:100%;
+padding:15px;
+margin-top:10px;
+margin-bottom:20px;
+border:1px solid #ddd;
+border-radius:8px;
+
+}
+
+
+.swap-card button{
+
+width:100%;
+padding:15px;
+background:#2563eb;
+color:white;
+border:none;
+border-radius:8px;
+
+}
+
+
+#swapResult{
+
+margin-top:20px;
+color:#2563eb;
+font-weight:bold;
+
+}
+
+
+
+/* WALLET MODAL */
+
+.modal{
+
+display:none;
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+background:rgba(0,0,0,.6);
+
+}
+
+
+.modal-content{
+
+background:white;
+width:400px;
+max-width:90%;
+margin:120px auto;
+padding:30px;
+border-radius:15px;
+text-align:center;
+
+}
+
+
+.wallet-option{
+
+width:100%;
+margin-top:15px;
+padding:15px;
+border:none;
+border-radius:8px;
+background:#2563eb;
+color:white;
+
+}
+
+
+
+
+/* DASHBOARD */
+
+.dashboard{
+
+padding:80px 60px;
+
+}
+
+
+.dashboard h2{
+
+font-size:40px;
+margin-bottom:40px;
+
+}
+
+
+.cards{
+
+display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:30px;
+margin-bottom:50px;
+
+}
+
+
+.card{
+
+background:white;
+padding:35px;
+border-radius:15px;
+box-shadow:0 8px 25px rgba(0,0,0,.08);
+
+}
+
+
+.card h3{
+
+margin-bottom:20px;
+
+}
+
+
+.card p{
+
+font-size:25px;
+font-weight:bold;
+color:#2563eb;
+
+}
+
+
+
+
+/* TRANSACTIONS */
+
+.transactions{
+
+background:white;
+padding:35px;
+border-radius:15px;
+
+}
+
+
+table{
+
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
+
+}
+
+
+th, td{
+
+padding:15px;
+border-bottom:1px solid #ddd;
+text-align:left;
+
+}
+
+
+
+/* SWAP METHODS */
+
+.swap-methods{
+
+display:flex;
+gap:15px;
+
+}
+
+
+.swap-methods button{
+
+flex:1;
+
+}
+
+
+
+/* MOBILE */
+
+@media(max-width:900px){
+
+.hero{
+
+flex-direction:column;
+
+}
+
+
+.cards{
+
+grid-template-columns:1fr;
+
+}
+
+
+header{
+
+flex-direction:column;
+gap:20px;
+
+}
+
+}
+
+
+#depositAddress{
+
+background:#f1f5f9;
+padding:15px;
+border-radius:8px;
+margin:20px 0;
+font-family:monospace;
+
+}
+
+
+#copyAddress{
+
+background:#2563eb;
+color:white;
+border:none;
+padding:12px 25px;
+border-radius:8px;
+cursor:pointer;
+
+}
+
+
+.transactions ul{
+
+margin-top:20px;
+padding-left:20px;
+
+}
+
+
+.transactions li{
+
+margin:15px 0;
+
+}
+
+#assetList{
+
+display:grid;
+grid-template-columns:repeat(2,1fr);
+gap:20px;
+margin-top:30px;
+
+}

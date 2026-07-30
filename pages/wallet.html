@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>Swapper Africa Wallet</title>
+
+<link rel="stylesheet" href="../css/style.css">
+
+</head>
+
+
+<body>
+
+
+<header>
+
+<div class="logo">
+<h1>Swapper Africa</h1>
+</div>
+
+
+<nav>
+
+<a href="../index.html">Home</a>
+<a href="swap.html">Swap</a>
+<a href="wallet.html">Wallet</a>
+<a href="dashboard.html">Dashboard</a>
+
+</nav>
+
+
+<button class="connect-btn">
+Connect Wallet
+</button>
+
+
+</header>
+
+
+
+
+<section class="dashboard">
+
+
+<h2>My Wallet</h2>
+
+
+
+<div class="cards">
+
+
+<div class="card">
+
+<h3>Total Balance</h3>
+
+<p>
+$25,430.00
+</p>
+
+</div>
+
+
+
+<div class="card">
+
+<h3>Wallet Status</h3>
+
+<p id="walletStatus">
+Not Connected
+</p>
+
+</div>
+
+
+<div class="card">
+
+<h3>Network</h3>
+
+<p>
+Ethereum
+</p>
+
+</div>
+
+
+</div>
+
+
+
+
+
+<div class="transactions">
+
+
+<h3>Your Deposit Address</h3>
+
+
+<p id="depositAddress">
+
+0xSwapperAfrica123456789XYZ
+
+</p>
+
+
+<button id="copyAddress">
+
+Copy Address
+
+</button>
+
+
+
+<h3>Your Assets</h3>
+
+
+<div id="assetList">
+
+<p>Loading assets...</p>
+
+</div>
+
+
+<ul>
+
+<li>Bitcoin (BTC)</li>
+
+<li>Ethereum (ETH)</li>
+
+<li>USDT</li>
+
+<li>Solana (SOL)</li>
+
+</ul>
+
+
+
+</div>
+
+
+</section>
+
+
+
+
+<script>
+
+
+const wallet =
+localStorage.getItem("connectedWallet");
+
+
+const status =
+localStorage.getItem("walletStatus");
+
+
+
+if(wallet){
+
+document.getElementById("walletStatus").textContent =
+wallet + " - " + status;
+
+}
+
+
+
+
+const copyButton =
+document.getElementById("copyAddress");
+
+
+copyButton.addEventListener("click",()=>{
+
+
+const address =
+document.getElementById("depositAddress").textContent;
+
+
+navigator.clipboard.writeText(address);
+
+
+alert("Deposit address copied!");
+
+
+
+});
+
+
+
+</script>
+
+
+<script>
+
+
+const user =
+JSON.parse(localStorage.getItem("userData"));
+
+
+
+const assetList =
+document.getElementById("assetList");
+
+
+
+if(user){
+
+
+assetList.innerHTML = `
+
+
+<div class="card">
+
+<h3>Bitcoin (BTC)</h3>
+
+<p>${user.balance.BTC} BTC</p>
+
+</div>
+
+
+
+<div class="card">
+
+<h3>Ethereum (ETH)</h3>
+
+<p>${user.balance.ETH} ETH</p>
+
+</div>
+
+
+
+<div class="card">
+
+<h3>USDT</h3>
+
+<p>${user.balance.USDT} USDT</p>
+
+</div>
+
+
+
+<div class="card">
+
+<h3>Solana (SOL)</h3>
+
+<p>${user.balance.SOL} SOL</p>
+
+</div>
+
+
+
+`;
+
+}
+
+
+</script>
+
+
+
+
+</body>
+
+</html>
