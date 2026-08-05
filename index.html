@@ -17,16 +17,16 @@
   <main>
     <section class="hero-shell">
       <div class="hero-copy">
-        <p class="eyebrow">Built for confident trading</p>
+        <p class="eyebrow">Built for confident African trading</p>
         <h1>Crypto swaps that feel <em>clear.</em></h1>
-        <p class="hero-description">Get a transparent quote, review every detail, and move between the assets you use—without the clutter.</p>
+        <p class="hero-description">Swap assets with live quotes, transparent pricing, and wallet-backed history—designed for fast, easy trade workflows.</p>
         <div class="hero-actions"><button id="startSwapBtn" class="button button-primary">Start a swap <span>→</span></button><a class="text-link" href="pages/dashboard.html">View activity</a></div>
-        <div class="trust-row"><span>✓ Clear rates</span><span>✓ Review before confirming</span><span>✓ Local demo wallet</span></div>
+        <div class="trust-row"><span>✓ Clear rates & fees</span><span>✓ Confirm with confidence</span><span>✓ Secure account swap history</span></div>
       </div>
 
       <section id="swapPanel" class="swap-panel" aria-labelledby="swapTitle">
         <div class="panel-heading"><div><p class="eyebrow">Instant quote</p><h2 id="swapTitle">Swap assets</h2></div><span class="live-badge"><i></i> Live quote</span></div>
-        <div class="asset-input"><div class="field-top"><label for="fromCoin">You pay</label><span id="fromBalance">Available: —</span></div><div class="asset-row"><input id="amount" type="number" min="0" step="any" inputmode="decimal" placeholder="0.00"><select id="fromCoin" aria-label="Asset to pay"><option>BTC</option><option>ETH</option><option>USDT</option><option>SOL</option></select></div><div class="quick-amounts" aria-label="Quick amount"><button type="button" data-amount-percent="25">25%</button><button type="button" data-amount-percent="50">50%</button><button type="button" data-amount-percent="75">75%</button><button type="button" data-amount-percent="100">Max</button></div></div>
+        <div class="asset-input"><div class="field-top"><label for="fromCoin">You send</label><span id="fromBalance">Available: —</span></div><div class="asset-row"><input id="amount" type="number" min="0" step="any" inputmode="decimal" placeholder="0.00"><select id="fromCoin" aria-label="Asset to send"><option>BTC</option><option>ETH</option><option>USDT</option><option>SOL</option></select></div><div class="quick-amounts" aria-label="Quick amount"><button type="button" data-amount-percent="25">25%</button><button type="button" data-amount-percent="50">50%</button><button type="button" data-amount-percent="75">75%</button><button type="button" data-amount-percent="100">Max</button></div></div>
         <button id="flipAssets" class="flip-button" type="button" aria-label="Reverse swap assets">↓</button>
         <div class="asset-input"><div class="field-top"><label for="toCoin">You receive</label><span>Estimated</span></div><div class="asset-row output"><output id="quoteOutput">Enter an amount to see your quote</output><select id="toCoin" aria-label="Asset to receive"><option>USDT</option><option>BTC</option><option>ETH</option><option>SOL</option></select></div></div>
         <div class="quote-details"><div><span>Rate</span><strong id="rateDetail">—</strong></div><div><span>Network &amp; service fee</span><strong id="feeDetail">—</strong></div></div>
