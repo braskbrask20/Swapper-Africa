@@ -1,160 +1,118 @@
-// SWAP CALCULATOR
-
+const fromCoin = document.getElementById("fromCoin");
+const toCoin = document.getElementById("toCoin");
+const amountInput = document.getElementById("amount");
+const quoteOutput = document.getElementById("quoteOutput");
 const swapButton = document.getElementById("swapBtn");
+const swapResult = document.getElementById("swapResult");
+const fromBalance = document.getElementById("fromBalance");
+const rateDetail = document.getElementById("rateDetail");
+const feeDetail = document.getElementById("feeDetail");
 
+function showToast(message) {
+  const toast = document.getElementById("toast");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add("is-visible");
+  window.setTimeout(() => toast.classList.remove("is-visible"), 3000);
+}
 
-const exchangeRates = {
+function refreshQuote() {
+  if (!fromCoin || !toCoin || !amountInput) return;
 
-BTC: 118000,
-ETH: 3800,
-USDT: 1,
-SOL: 180
+  const user = getUser();
+  const amount = Number(amountInput.value);
+  const quote = getQuote(fromCoin.value, toCoin.value, amount);
+  if (fromBalance) fromBalance.textContent = `Available: ${formatAsset(user.balance[fromCoin.value], fromCoin.value)}`;
 
-};
+  if (!quote) {
+    if (quoteOutput) quoteOutput.textContent = "Enter an amount to see your quote";
+    if (rateDetail) rateDetail.textContent = "—";
+    if (feeDetail) feeDetail.textContent = "—";
+    return null;
+  }
 
+  if (quoteOutput) quoteOutput.textContent = formatAsset(quote.received, toCoin.value);
+  if (rateDetail) rateDetail.textContent = `1 ${fromCoin.value} = ${formatAsset(quote.rate, toCoin.value)}`;
+  if (feeDetail) feeDetail.textContent = formatAsset(quote.fee, toCoin.value);
+  return quote;
+}
 
+[fromCoin, toCoin, amountInput].filter(Boolean).forEach((element) => {
+  element.addEventListener("input", refreshQuote);
+  element.addEventListener("change", refreshQuote);
+});
+
+const flipAssets = document.getElementById("flipAssets");
+if (flipAssets) {
+  flipAssets.addEventListener("click", () => {
+    const currentFrom = fromCoin.value;
+    fromCoin.value = toCoin.value;
+    toCoin.value = currentFrom;
+    refreshQuote();
+  });
+}
 
 if (swapButton) {
+  swapButton.addEventListener("click", () => {
+    const user = getUser();
+    const amount = Number(amountInput.value);
+    const quote = refreshQuote();
 
+    if (!quote) {
+      swapResult.textContent = "Choose two different assets and enter a valid amount.";
+      return;
+    }
+    if (!hasEnoughBalance(user, fromCoin.value, amount)) {
+      swapResult.textContent = `You do not have enough ${fromCoin.value} for this swap.`;
+      return;
+    }
 
-swapButton.addEventListener("click", function(){
-
-
-const from = document.getElementById("fromCoin").value;
-
-const to = document.getElementById("toCoin").value;
-
-const amount = Number(
-document.getElementById("amount").value
-);
-
-
-const result =
-document.getElementById("swapResult");
-
-
-
-if(!amount || amount <= 0){
-
-result.textContent =
-"Please enter a valid amount.";
-
-return;
-
-// CHECK USER BALANCE
-
-let user =
-JSON.parse(localStorage.getItem("userData"));
-
-
-if(user && user.balance[from] < amount){
-
-
-result.textContent =
-`Insufficient ${from} balance.`;
-
-
-return;
-
+    localStorage.setItem("pendingSwap", JSON.stringify({
+      from: fromCoin.value,
+      to: toCoin.value,
+      amount,
+      received: quote.received,
+      fee: quote.fee,
+      rate: quote.rate,
+      createdAt: Date.now()
+    }));
+    const confirmationPage = window.location.pathname.includes("/pages/") ? "confirm-swap.html" : "pages/confirm-swap.html";
+    window.location.href = confirmationPage;
+  });
 }
 
+const modal = document.getElementById("walletModal");
+const openWalletButtons = document.querySelectorAll("[data-open-wallet]");
+const closeModal = document.getElementById("closeModal");
 
-}
+openWalletButtons.forEach((button) => button.addEventListener("click", () => {
+  if (modal) modal.classList.add("is-open");
+}));
 
-
-
-const usdValue =
-amount * exchangeRates[from];
-
-
-const convertedAmount =
-usdValue / exchangeRates[to];
-
-
-
-result.textContent =
-`${amount} ${from} ≈ ${convertedAmount.toFixed(6)} ${to}`;
-
-
-
-// SAVE TRANSACTION
-
-user =
-JSON.parse(localStorage.getItem("userData"));
-
-
-
-if(!user){
-
-user = {
-
-username:"Swapper User",
-
-wallet:"",
-
-balance:{
-BTC:0,
-ETH:0,
-USDT:0,
-SOL:0
-},
-
-transactions:[]
-
-};
-
-}
-
-if(user.balance[from] < amount){
-
-result.textContent =
-`You do not have enough ${from}`;
-
-return;
-
-}
-
-// UPDATE BALANCES
-
-// Remove sent asset
-
-user.balance[from] =
-user.balance[from] - amount;
-
-
-// Add received asset
-
-user.balance[to] =
-user.balance[to] + convertedAmount;;
-
-user.transactions.push({
-
-id:
-"SWP-" + Date.now(),
-
-from: from,
-
-to: to,
-
-amount: amount,
-
-received: convertedAmount.toFixed(6),
-
-status:"Completed",
-
-date:new Date().toLocaleString()
-
+if (closeModal) closeModal.addEventListener("click", () => modal.classList.remove("is-open"));
+if (modal) modal.addEventListener("click", (event) => {
+  if (event.target === modal) modal.classList.remove("is-open");
 });
 
-
-
-localStorage.setItem(
-"userData",
-JSON.stringify(user)
-);
-
-
+document.querySelectorAll(".wallet-option").forEach((button) => {
+  button.addEventListener("click", () => {
+    const selectedWallet = button.dataset.wallet;
+    localStorage.setItem("connectedWallet", selectedWallet);
+    localStorage.setItem("walletStatus", "Connected");
+    if (modal) modal.classList.remove("is-open");
+    showToast(`${selectedWallet} connected`);
+  });
 });
 
+const startSwapButton = document.getElementById("startSwapBtn");
+if (startSwapButton) startSwapButton.addEventListener("click", () => {
+  document.getElementById("swapPanel").scrollIntoView({ behavior: "smooth", block: "center" });
+  amountInput.focus();
+});
 
-}
+const depositWalletButton = document.getElementById("depositWalletBtn");
+if (depositWalletButton) depositWalletButton.addEventListener("click", () => {
+  window.location.href = "pages/wallet.html";
+});
+
+refreshQuote();
