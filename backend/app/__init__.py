@@ -1,0 +1,1 @@
+"""Swapper Africa API package."""

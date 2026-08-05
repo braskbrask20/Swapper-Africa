@@ -1,7 +1,8 @@
 let swapData = null;
 try { swapData = JSON.parse(localStorage.getItem("pendingSwap")); } catch (error) { localStorage.removeItem("pendingSwap"); }
 
-if (!swapData || !swapData.from || !swapData.to || !Number.isFinite(swapData.amount) || !Number.isFinite(swapData.received)) {
+if (!swapData || !swapData.from || !swapData.to || !Number.isFinite(swapData.amount) || !Number.isFinite(swapData.received) || !Number.isFinite(swapData.createdAt) || Date.now() - swapData.createdAt > 60000) {
+  localStorage.removeItem("pendingSwap");
   window.location.replace("swap.html");
 } else {
   document.getElementById("confirmFrom").textContent = formatAsset(swapData.amount, swapData.from);

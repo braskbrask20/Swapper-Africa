@@ -7,6 +7,7 @@ const swapResult = document.getElementById("swapResult");
 const fromBalance = document.getElementById("fromBalance");
 const rateDetail = document.getElementById("rateDetail");
 const feeDetail = document.getElementById("feeDetail");
+const quoteExpiry = document.getElementById("quoteExpiry");
 
 function showToast(message) {
   const toast = document.getElementById("toast");
@@ -37,6 +38,16 @@ function refreshQuote() {
   return quote;
 }
 
+function updateQuoteExpiry() {
+  if (!quoteExpiry) return;
+  let seconds = 30;
+  quoteExpiry.textContent = `Quote refreshes in ${seconds}s`;
+  window.setInterval(() => {
+    seconds = seconds <= 1 ? 30 : seconds - 1;
+    quoteExpiry.textContent = `Quote refreshes in ${seconds}s`;
+  }, 1000);
+}
+
 [fromCoin, toCoin, amountInput].filter(Boolean).forEach((element) => {
   element.addEventListener("input", refreshQuote);
   element.addEventListener("change", refreshQuote);
@@ -51,6 +62,14 @@ if (flipAssets) {
     refreshQuote();
   });
 }
+
+document.querySelectorAll("[data-amount-percent]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const available = getUser().balance[fromCoin.value];
+    amountInput.value = String(available * (Number(button.dataset.amountPercent) / 100));
+    refreshQuote();
+  });
+});
 
 if (swapButton) {
   swapButton.addEventListener("click", () => {
@@ -116,3 +135,4 @@ if (depositWalletButton) depositWalletButton.addEventListener("click", () => {
 });
 
 refreshQuote();
+updateQuoteExpiry();
