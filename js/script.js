@@ -17,32 +17,41 @@ function showToast(message) {
   window.setTimeout(() => toast.classList.remove("is-visible"), 3000);
 }
 
-function refreshQuote() {
-  if (!fromCoin || !toCoin || !amountInput) return;
+async function refreshQuote() {
+  if (!fromCoin || !toCoin || !amountInput) return null;
 
   const user = getUser();
   const amount = Number(amountInput.value);
-  const quote = getQuote(fromCoin.value, toCoin.value, amount);
-  if (fromBalance) fromBalance.textContent = `Available: ${formatAsset(user.balance[fromCoin.value], fromCoin.value)}`;
+  const quote = await fetchQuote(fromCoin.value, toCoin.value, amount);
+  if (fromBalance) {
+    const available = formatAsset(user.balance[fromCoin.value] ?? 0, fromCoin.value);
+    fromBalance.textContent = `Available: ${available}`;
+  }
 
   if (!quote) {
-    if (quoteOutput) quoteOutput.textContent = "Enter an amount to see your quote";
+    if (quoteOutput) {
+      quoteOutput.textContent = fromCoin.value === toCoin.value ? "Choose two different assets." : "Enter an amount to see your quote.";
+    }
     if (rateDetail) rateDetail.textContent = "—";
     if (feeDetail) feeDetail.textContent = "—";
+    if (swapButton) swapButton.disabled = true;
     return null;
   }
 
   if (quoteOutput) quoteOutput.textContent = formatAsset(quote.received, toCoin.value);
   if (rateDetail) rateDetail.textContent = `1 ${fromCoin.value} = ${formatAsset(quote.rate, toCoin.value)}`;
   if (feeDetail) feeDetail.textContent = formatAsset(quote.fee, toCoin.value);
+  if (swapButton) swapButton.disabled = false;
   return quote;
 }
 
 function updateQuoteExpiry() {
   if (!quoteExpiry) return;
+  // Prevent creating multiple intervals if this is called repeatedly
+  if (updateQuoteExpiry._interval) clearInterval(updateQuoteExpiry._interval);
   let seconds = 30;
   quoteExpiry.textContent = `Quote refreshes in ${seconds}s`;
-  window.setInterval(() => {
+  updateQuoteExpiry._interval = setInterval(() => {
     seconds = seconds <= 1 ? 30 : seconds - 1;
     quoteExpiry.textContent = `Quote refreshes in ${seconds}s`;
   }, 1000);
@@ -71,14 +80,31 @@ document.querySelectorAll("[data-amount-percent]").forEach((button) => {
   });
 });
 
+async function fetchQuote(from, to, amount) {
+  if (!from || !to || from === to || !Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+
+  try {
+    return await SwapperAPI.quote(from, to, amount);
+  } catch (error) {
+    return getQuote(from, to, amount);
+  }
+}
+
 if (swapButton) {
-  swapButton.addEventListener("click", () => {
+  swapButton.addEventListener("click", async () => {
+    if (!SwapperAPI.isAuthenticated()) {
+      window.location.href = "auth.html?next=swap.html";
+      return;
+    }
+
     const user = getUser();
     const amount = Number(amountInput.value);
-    const quote = refreshQuote();
+    const quote = await refreshQuote();
 
     if (!quote) {
-      swapResult.textContent = "Choose two different assets and enter a valid amount.";
+      swapResult.textContent = fromCoin.value === toCoin.value ? "Choose two different assets." : "Enter a valid amount to see your quote.";
       return;
     }
     if (!hasEnoughBalance(user, fromCoin.value, amount)) {
@@ -86,6 +112,7 @@ if (swapButton) {
       return;
     }
 
+    swapResult.textContent = "";
     localStorage.setItem("pendingSwap", JSON.stringify({
       from: fromCoin.value,
       to: toCoin.value,
