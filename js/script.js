@@ -9,6 +9,8 @@ const rateDetail = document.getElementById("rateDetail");
 const feeDetail = document.getElementById("feeDetail");
 const quoteExpiry = document.getElementById("quoteExpiry");
 
+let accountSnapshot = { balance: { BTC: 0, ETH: 0, USDT: 0, SOL: 0 }, transactions: [] };
+
 function showToast(message) {
   const toast = document.getElementById("toast");
   if (!toast) return;
@@ -20,10 +22,9 @@ function showToast(message) {
 function refreshQuote() {
   if (!fromCoin || !toCoin || !amountInput) return;
 
-  const user = getUser();
   const amount = Number(amountInput.value);
   const quote = getQuote(fromCoin.value, toCoin.value, amount);
-  if (fromBalance) fromBalance.textContent = `Available: ${formatAsset(user.balance[fromCoin.value], fromCoin.value)}`;
+  if (fromBalance) fromBalance.textContent = `Available: ${formatAsset(accountSnapshot.balance[fromCoin.value], fromCoin.value)}`;
 
   if (!quote) {
     if (quoteOutput) quoteOutput.textContent = "Enter an amount to see your quote";
@@ -65,7 +66,7 @@ if (flipAssets) {
 
 document.querySelectorAll("[data-amount-percent]").forEach((button) => {
   button.addEventListener("click", () => {
-    const available = getUser().balance[fromCoin.value];
+    const available = accountSnapshot.balance[fromCoin.value];
     amountInput.value = String(available * (Number(button.dataset.amountPercent) / 100));
     refreshQuote();
   });
@@ -73,7 +74,6 @@ document.querySelectorAll("[data-amount-percent]").forEach((button) => {
 
 if (swapButton) {
   swapButton.addEventListener("click", () => {
-    const user = getUser();
     const amount = Number(amountInput.value);
     const quote = refreshQuote();
 
@@ -81,7 +81,7 @@ if (swapButton) {
       swapResult.textContent = "Choose two different assets and enter a valid amount.";
       return;
     }
-    if (!hasEnoughBalance(user, fromCoin.value, amount)) {
+    if (!hasEnoughBalance(accountSnapshot, fromCoin.value, amount)) {
       swapResult.textContent = `You do not have enough ${fromCoin.value} for this swap.`;
       return;
     }
@@ -134,5 +134,15 @@ if (depositWalletButton) depositWalletButton.addEventListener("click", () => {
   window.location.href = "pages/wallet.html";
 });
 
-refreshQuote();
+async function initAccount() {
+  if (!fromCoin || !toCoin || !amountInput) return;
+  try {
+    accountSnapshot = await getAccountSnapshot();
+  } catch (error) {
+    if (swapResult) swapResult.textContent = "Could not load your balance. Please refresh to try again.";
+  }
+  refreshQuote();
+}
+
+initAccount();
 updateQuoteExpiry();

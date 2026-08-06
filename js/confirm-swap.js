@@ -10,18 +10,33 @@ if (!swapData || !swapData.from || !swapData.to || !Number.isFinite(swapData.amo
   document.getElementById("confirmRate").textContent = `1 ${swapData.from} = ${formatAsset(swapData.rate, swapData.to)}`;
   document.getElementById("confirmFee").textContent = formatAsset(swapData.fee, swapData.to);
 
-  document.getElementById("confirmSwapBtn").addEventListener("click", () => {
+  document.getElementById("confirmSwapBtn").addEventListener("click", async () => {
     const button = document.getElementById("confirmSwapBtn");
+    const message = document.getElementById("confirmMessage");
     button.disabled = true;
     button.textContent = "Confirming…";
-    const result = swapCrypto(swapData.from, swapData.to, swapData.amount, swapData.received);
-    if (result.success) {
+    message.textContent = "";
+    try {
+      if (isSignedIn()) {
+        await SwapperAPI.request("/v1/swaps", {
+          method: "POST",
+          body: JSON.stringify({
+            from_asset: swapData.from,
+            to_asset: swapData.to,
+            amount: swapData.amount,
+            expected_received: swapData.received
+          })
+        });
+      } else {
+        const result = swapCrypto(swapData.from, swapData.to, swapData.amount, swapData.received);
+        if (!result.success) throw new Error(result.message);
+      }
       localStorage.removeItem("pendingSwap");
       window.location.href = "dashboard.html";
-    } else {
+    } catch (error) {
       button.disabled = false;
       button.textContent = "Confirm swap";
-      document.getElementById("confirmMessage").textContent = result.message;
+      message.textContent = error.message;
     }
   });
 }

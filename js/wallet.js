@@ -112,3 +112,34 @@ function swapCrypto(from, to, amount, received) {
   saveUser(user);
   return { success: true, message: "Swap completed." };
 }
+
+function isSignedIn() {
+  return typeof SwapperAPI !== "undefined" && SwapperAPI.isAuthenticated();
+}
+
+async function fetchRemoteAccount() {
+  const [balanceRows, swaps] = await Promise.all([
+    SwapperAPI.request("/v1/balances"),
+    SwapperAPI.request("/v1/swaps")
+  ]);
+  const balance = { BTC: 0, ETH: 0, USDT: 0, SOL: 0 };
+  balanceRows.forEach((row) => { balance[row.asset] = row.amount; });
+  const transactions = swaps.map((swap) => ({
+    id: swap.reference,
+    from: swap.from_asset,
+    to: swap.to_asset,
+    amount: swap.amount,
+    received: swap.amount_received,
+    status: swap.status.charAt(0).toUpperCase() + swap.status.slice(1),
+    date: new Date(swap.created_at).toLocaleString()
+  }));
+  return { balance, transactions };
+}
+
+// Guests keep the local browser demo untouched; signed-in users get their real,
+// backend-owned balance and swap history instead. Always await this — for guests it
+// resolves immediately, for signed-in users it makes a network call.
+async function getAccountSnapshot() {
+  if (!isSignedIn()) return getUser();
+  return fetchRemoteAccount();
+}

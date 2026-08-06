@@ -1,8 +1,6 @@
-const dashboardUser = getUser();
-const connectedWallet = localStorage.getItem("connectedWallet");
+let dashboardUser = { balance: { BTC: 0, ETH: 0, USDT: 0, SOL: 0 }, transactions: [] };
 
-document.getElementById("totalBalance").textContent = formatUsd(getPortfolioValue(dashboardUser));
-document.getElementById("totalTransactions").textContent = dashboardUser.transactions.length;
+const connectedWallet = localStorage.getItem("connectedWallet");
 const walletStatus = document.getElementById("walletStatus");
 walletStatus.textContent = connectedWallet || "Not connected";
 document.getElementById("walletDot").classList.toggle("connected", Boolean(connectedWallet));
@@ -47,4 +45,16 @@ document.getElementById("exportActivity").addEventListener("click", () => {
   URL.revokeObjectURL(link.href);
 });
 
-renderTransactions();
+async function init() {
+  try {
+    dashboardUser = await getAccountSnapshot();
+    document.getElementById("totalBalance").textContent = formatUsd(getPortfolioValue(dashboardUser));
+    document.getElementById("totalTransactions").textContent = dashboardUser.transactions.length;
+    renderTransactions();
+  } catch (error) {
+    emptyActivity.hidden = false;
+    emptyActivity.textContent = "Could not load your activity. Please refresh to try again.";
+  }
+}
+
+init();

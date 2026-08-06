@@ -1,17 +1,10 @@
-const walletUser = getUser();
 const walletName = localStorage.getItem("connectedWallet");
-document.getElementById("walletPortfolioValue").textContent = formatUsd(getPortfolioValue(walletUser));
 document.getElementById("walletStatus").textContent = walletName || "Not connected";
 document.getElementById("walletDot").classList.toggle("connected", Boolean(walletName));
 
 const assetList = document.getElementById("assetList");
-SWAPPER_ASSETS.forEach((asset) => {
-  const amount = Number(walletUser.balance[asset]) || 0;
-  const item = document.createElement("div");
-  item.className = "asset-row-card";
-  item.innerHTML = `<span class="asset-symbol">${asset}</span><div><strong>${asset === "USDT" ? "Tether" : asset}</strong><span>${asset}</span></div><div class="asset-value"><strong>${formatAsset(amount, asset)}</strong><span>${formatUsd(amount * SWAPPER_RATES[asset])}</span></div>`;
-  assetList.appendChild(item);
-});
+const demoNotice = document.getElementById("demoNotice");
+const resetButton = document.getElementById("resetDemo");
 
 document.getElementById("copyAddress").addEventListener("click", async () => {
   const address = document.getElementById("depositAddress").textContent.trim();
@@ -24,10 +17,37 @@ document.getElementById("copyAddress").addEventListener("click", async () => {
   window.setTimeout(() => { document.getElementById("copyAddress").textContent = "Copy address"; }, 1800);
 });
 
-const resetButton = document.getElementById("resetDemo");
-resetButton.addEventListener("click", () => {
-  if (window.confirm("Reset your demo balances and swap activity?")) {
-    resetDemoUser();
-    window.location.reload();
+if (isSignedIn()) {
+  demoNotice.textContent = "These are demo funds held in your Swapper Africa account — not a real wallet, and not real money.";
+  resetButton.hidden = true;
+} else {
+  resetButton.addEventListener("click", () => {
+    if (window.confirm("Reset your demo balances and swap activity?")) {
+      resetDemoUser();
+      window.location.reload();
+    }
+  });
+}
+
+async function init() {
+  try {
+    const walletUser = await getAccountSnapshot();
+    document.getElementById("walletPortfolioValue").textContent = formatUsd(getPortfolioValue(walletUser));
+    assetList.innerHTML = "";
+    SWAPPER_ASSETS.forEach((asset) => {
+      const amount = Number(walletUser.balance[asset]) || 0;
+      const item = document.createElement("div");
+      item.className = "asset-row-card";
+      item.innerHTML = `<span class="asset-symbol">${asset}</span><div><strong>${asset === "USDT" ? "Tether" : asset}</strong><span>${asset}</span></div><div class="asset-value"><strong>${formatAsset(amount, asset)}</strong><span>${formatUsd(amount * SWAPPER_RATES[asset])}</span></div>`;
+      assetList.appendChild(item);
+    });
+  } catch (error) {
+    assetList.innerHTML = "";
+    const message = document.createElement("p");
+    message.className = "empty-state";
+    message.textContent = "Could not load your wallet. Please refresh to try again.";
+    assetList.appendChild(message);
   }
-});
+}
+
+init();

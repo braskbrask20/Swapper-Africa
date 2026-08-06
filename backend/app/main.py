@@ -6,8 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from .config import get_settings
 from .database import Base, SessionLocal, engine, get_db
-from .models import AuditLog, Swap, User
-from .schemas import (CreateSwapRequest, LoginRequest, QuoteRequest, QuoteResponse,
+from .models import AuditLog, Balance, Swap, User
+from .schemas import (BalanceResponse, CreateSwapRequest, LoginRequest, QuoteRequest, QuoteResponse,
                       RegisterRequest, SwapResponse, TokenResponse, UpdateSwapStatusRequest, UserResponse)
 from .security import bearer_scheme, create_access_token, decode_access_token, hash_password, verify_password
 
@@ -21,6 +21,10 @@ if settings.environment == "development":
     cors_options["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$"
 app.add_middleware(CORSMiddleware, **cors_options)
 RATES = {"BTC": 118000, "ETH": 3800, "USDT": 1, "SOL": 180}
+# There is no licensed custody/liquidity provider wired up yet (see LAUNCH_CHECKLIST.md), so
+# every account is seeded with the same demo balances the old browser-local demo used, and swaps
+# settle instantly instead of sitting in "pending". Real balances land when that provider does.
+DEMO_STARTING_BALANCES = {"BTC": 1, "ETH": 5, "USDT": 10000, "SOL": 20}
 
 
 @app.on_event("startup")
@@ -59,6 +63,22 @@ def swap_response(swap: Swap) -> SwapResponse:
     return SwapResponse(reference=swap.reference, from_asset=swap.from_asset, to_asset=swap.to_asset, amount=float(swap.amount), amount_received=float(swap.amount_received), fee=float(swap.fee), status=swap.status, created_at=swap.created_at)
 
 
+def ensure_balances(db: Session, user: User) -> dict[str, Balance]:
+    rows = {row.asset: row for row in db.scalars(select(Balance).where(Balance.user_id == user.id))}
+    created = False
+    for asset, amount in DEMO_STARTING_BALANCES.items():
+        if asset not in rows:
+            row = Balance(user_id=user.id, asset=asset, amount=amount)
+            db.add(row)
+            rows[asset] = row
+            created = True
+    if created:
+        db.commit()
+        for row in rows.values():
+            db.refresh(row)
+    return rows
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "environment": settings.environment}
@@ -95,15 +115,28 @@ def quote(request: QuoteRequest) -> QuoteResponse:
     return make_quote(request)
 
 
+@app.get("/v1/balances", response_model=list[BalanceResponse])
+def balances(user: User = Depends(current_user), db: Session = Depends(get_db)) -> list[BalanceResponse]:
+    rows = ensure_balances(db, user)
+    return [BalanceResponse(asset=asset, amount=float(row.amount)) for asset, row in rows.items()]
+
+
 @app.post("/v1/swaps", response_model=SwapResponse, status_code=status.HTTP_201_CREATED)
 def create_swap(request: CreateSwapRequest, user: User = Depends(current_user), db: Session = Depends(get_db)) -> SwapResponse:
     quote = make_quote(request)
     if abs(quote.received - request.expected_received) > max(0.000001, quote.received * 0.005):
         raise HTTPException(status_code=409, detail="Quote changed. Request a new quote before confirming.")
-    swap = Swap(reference=f"SWP-{uuid4().hex[:10].upper()}", user_id=user.id, from_asset=request.from_asset, to_asset=request.to_asset, amount=request.amount, amount_received=quote.received, fee=quote.fee, status="pending")
+    balances = ensure_balances(db, user)
+    from_balance = balances[request.from_asset]
+    if float(from_balance.amount) < request.amount:
+        raise HTTPException(status_code=409, detail=f"Insufficient {request.from_asset} balance for this swap.")
+    to_balance = balances[request.to_asset]
+    from_balance.amount = float(from_balance.amount) - request.amount
+    to_balance.amount = float(to_balance.amount) + quote.received
+    swap = Swap(reference=f"SWP-{uuid4().hex[:10].upper()}", user_id=user.id, from_asset=request.from_asset, to_asset=request.to_asset, amount=request.amount, amount_received=quote.received, fee=quote.fee, status="completed")
     db.add(swap)
     db.flush()
-    db.add(AuditLog(actor_id=user.id, action="swap.created", entity_type="swap", entity_id=swap.reference))
+    db.add(AuditLog(actor_id=user.id, action="swap.created", entity_type="swap", entity_id=swap.reference, metadata_json={"status": "completed"}))
     db.commit()
     db.refresh(swap)
     return swap_response(swap)

@@ -63,3 +63,8 @@ class SwapResponse(BaseModel):
 class UpdateSwapStatusRequest(BaseModel):
     status: str = Field(pattern="^(pending|processing|completed|failed|cancelled)$")
     provider_reference: Optional[str] = Field(default=None, max_length=128)
+
+
+class BalanceResponse(BaseModel):
+    asset: str
+    amount: float
