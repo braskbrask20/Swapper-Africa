@@ -80,28 +80,39 @@ def rate_limit(key_prefix: str, max_attempts: int, window_seconds: int):
     return dependency
 
 
-def sync_sqlite_columns() -> None:
-    # Base.metadata.create_all only creates missing tables, it never alters an existing one --
-    # fine for Postgres (numbered migrations under backend/migrations/ own that there), but local
-    # SQLite dev has no migration runner. Bring an existing dev DB's `users` table up to date
-    # in place so accounts created before this phase keep working without a manual step.
-    if not settings.database_url.startswith("sqlite"):
-        return
+# When you add a new column to User, add it here too -- create_all() only creates missing
+# tables, it never alters an existing one, and this is what keeps an already-deployed database
+# (dev SQLite *or* a live Postgres instance) from being stranded on the old schema. This is
+# exactly what broke the first Postgres deploy after Phase 6 added kyc_status: the numbered
+# files under backend/migrations/ are the long-term source of truth, but nothing was actually
+# applying them automatically, so the running database silently fell behind the code.
+USER_COLUMN_ADDITIONS = {
+    "is_email_verified": "BOOLEAN NOT NULL DEFAULT {false}",
+    "token_version": "INTEGER NOT NULL DEFAULT 0",
+    "kyc_status": "VARCHAR(20) NOT NULL DEFAULT 'not_started'",
+}
+
+
+def sync_users_columns() -> None:
+    is_sqlite = settings.database_url.startswith("sqlite")
     with engine.connect() as conn:
-        existing_columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(users)").fetchall()}
-        if existing_columns and "is_email_verified" not in existing_columns:
-            conn.exec_driver_sql("ALTER TABLE users ADD COLUMN is_email_verified BOOLEAN NOT NULL DEFAULT 0")
-        if existing_columns and "token_version" not in existing_columns:
-            conn.exec_driver_sql("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0")
-        if existing_columns and "kyc_status" not in existing_columns:
-            conn.exec_driver_sql("ALTER TABLE users ADD COLUMN kyc_status VARCHAR(20) NOT NULL DEFAULT 'not_started'")
+        if is_sqlite:
+            existing_columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(users)").fetchall()}
+            for column, definition in USER_COLUMN_ADDITIONS.items():
+                if existing_columns and column not in existing_columns:
+                    conn.exec_driver_sql(f"ALTER TABLE users ADD COLUMN {column} {definition.format(false=0)}")
+        else:
+            # Postgres (9.6+) supports IF NOT EXISTS on ADD COLUMN directly -- no need to
+            # inspect information_schema first, and safe to run unconditionally every startup.
+            for column, definition in USER_COLUMN_ADDITIONS.items():
+                conn.exec_driver_sql(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column} {definition.format(false='FALSE')}")
         conn.commit()
 
 
 @app.on_event("startup")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
-    sync_sqlite_columns()
+    sync_users_columns()
     with SessionLocal() as db:
         admin = db.scalar(select(User).where(User.email == settings.admin_email.lower()))
         if not admin:
