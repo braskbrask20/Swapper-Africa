@@ -30,6 +30,7 @@ if (isSignedIn()) {
 }
 
 async function init() {
+  const clearSlowLoadHint = warnIfSlowToLoad(assetList, "Waking up the server — this can take up to a minute on the first request.");
   try {
     const walletUser = await getAccountSnapshot();
     document.getElementById("walletPortfolioValue").textContent = formatUsd(getPortfolioValue(walletUser));
@@ -47,6 +48,8 @@ async function init() {
     message.className = "empty-state";
     message.textContent = "Could not load your wallet. Please refresh to try again.";
     assetList.appendChild(message);
+  } finally {
+    clearSlowLoadHint();
   }
 }
 

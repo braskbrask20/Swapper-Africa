@@ -136,10 +136,14 @@ if (depositWalletButton) depositWalletButton.addEventListener("click", () => {
 
 async function initAccount() {
   if (!fromCoin || !toCoin || !amountInput) return;
+  const clearSlowLoadHint = warnIfSlowToLoad(swapResult, "Waking up the server — this can take up to a minute on the first request.");
   try {
     accountSnapshot = await getAccountSnapshot();
+    if (swapResult) swapResult.textContent = "";
   } catch (error) {
     if (swapResult) swapResult.textContent = "Could not load your balance. Please refresh to try again.";
+  } finally {
+    clearSlowLoadHint();
   }
   refreshQuote();
 }

@@ -82,6 +82,7 @@ async function initVerificationBanner() {
 }
 
 async function init() {
+  const clearSlowLoadHint = warnIfSlowToLoad(emptyActivity, "Waking up the server — this can take up to a minute on the first request.");
   try {
     dashboardUser = await getAccountSnapshot();
     document.getElementById("totalBalance").textContent = formatUsd(getPortfolioValue(dashboardUser));
@@ -90,6 +91,8 @@ async function init() {
   } catch (error) {
     emptyActivity.hidden = false;
     emptyActivity.textContent = "Could not load your activity. Please refresh to try again.";
+  } finally {
+    clearSlowLoadHint();
   }
   initVerificationBanner();
 }

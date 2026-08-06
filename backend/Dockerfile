@@ -11,9 +11,7 @@ COPY css ./css
 COPY js ./js
 COPY pages ./pages
 COPY admin ./admin
-# images/ isn't copied: it's empty and untracked by git (git doesn't track empty
-# directories), so it won't exist in a fresh clone -- add this line back once it has
-# real files committed to it.
+COPY images ./images
 EXPOSE 8000
 # $PORT is set by Render (and similar platforms) at runtime; default to 8000 for plain
 # `docker run`/docker-compose use. Shell form so the variable actually expands.

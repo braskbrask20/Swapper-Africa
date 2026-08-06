@@ -143,3 +143,13 @@ async function getAccountSnapshot() {
   if (!isSignedIn()) return getUser();
   return fetchRemoteAccount();
 }
+
+// The hosted API can cold-start (free-tier instances spin down when idle), which can take
+// well past what looks like a frozen page. Call this right before an awaited fetch; call the
+// returned function once it settles either way. Never fires on a normal/warm response.
+function warnIfSlowToLoad(el, message) {
+  const timer = window.setTimeout(() => {
+    if (el) el.textContent = message;
+  }, 2500);
+  return () => window.clearTimeout(timer);
+}
