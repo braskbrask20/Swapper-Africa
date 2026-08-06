@@ -26,9 +26,14 @@ class UserResponse(BaseModel):
     role: str
     is_active: bool
     is_email_verified: bool
+    kyc_status: str
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class UpdateKycStatusRequest(BaseModel):
+    status: str = Field(pattern="^(not_started|pending|verified|rejected)$")
 
 
 class PasswordResetRequest(BaseModel):

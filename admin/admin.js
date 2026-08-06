@@ -42,14 +42,28 @@ function renderAdminSwaps(swaps) {
   });
 }
 
+function renderAdminUsers(users) {
+  const list = document.getElementById("adminUserList");
+  list.innerHTML = "";
+  document.getElementById("adminUsersEmpty").hidden = users.length > 0;
+  users.forEach((user) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td>${user.email}</td><td>${user.full_name}</td><td>${user.role}</td><td>${user.is_email_verified ? "Yes" : "No"}</td><td>${new Date(user.created_at).toLocaleDateString()}</td><td><select data-id="${user.id}" aria-label="Update KYC status for ${user.email}"><option value="not_started">Not started</option><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select></td>`;
+    row.querySelector("select").value = user.kyc_status;
+    row.querySelector("select").addEventListener("change", async (event) => { await api(`/v1/admin/users/${user.id}/kyc`, { method: "PATCH", body: JSON.stringify({ status: event.target.value }) }); loadAdmin(); });
+    list.appendChild(row);
+  });
+}
+
 async function loadAdmin() {
   if (!document.getElementById("adminSwapList")) return;
   try {
-    const [summary, swaps] = await Promise.all([api("/v1/admin/summary"), api("/v1/admin/swaps")]);
+    const [summary, swaps, users] = await Promise.all([api("/v1/admin/summary"), api("/v1/admin/swaps"), api("/v1/admin/users")]);
     document.getElementById("adminUsers").textContent = summary.users;
     document.getElementById("adminSwaps").textContent = summary.swaps;
     document.getElementById("adminPending").textContent = summary.pending_swaps;
     renderAdminSwaps(swaps);
+    renderAdminUsers(users);
   } catch (error) { document.getElementById("adminEmpty").hidden = false; document.getElementById("adminEmpty").textContent = error.message; }
 }
 

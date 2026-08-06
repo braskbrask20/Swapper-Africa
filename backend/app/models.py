@@ -15,6 +15,9 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     token_version: Mapped[int] = mapped_column(Integer, default=0)
+    # Manual admin-set status for now -- no ID-verification vendor wired up yet. See
+    # LAUNCH_CHECKLIST.md: real KYC/AML requires an actual licensed provider and legal review.
+    kyc_status: Mapped[str] = mapped_column(String(20), default="not_started")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     swaps: Mapped[list["Swap"]] = relationship(back_populates="user")
     balances: Mapped[list["Balance"]] = relationship(back_populates="user")

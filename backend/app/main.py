@@ -16,7 +16,8 @@ from .database import Base, SessionLocal, engine, get_db
 from .models import AccountToken, AuditLog, Balance, Swap, User
 from .schemas import (BalanceResponse, CreateSwapRequest, EmailVerificationConfirm, EmailVerificationRequestResponse,
                       LoginRequest, PasswordResetConfirm, PasswordResetRequest, PasswordResetResponse, QuoteRequest,
-                      QuoteResponse, RegisterRequest, SwapResponse, TokenResponse, UpdateSwapStatusRequest, UserResponse)
+                      QuoteResponse, RegisterRequest, SwapResponse, TokenResponse, UpdateKycStatusRequest,
+                      UpdateSwapStatusRequest, UserResponse)
 from .security import (bearer_scheme, create_access_token, decode_access_token, generate_token, hash_password,
                        hash_token, verify_password)
 
@@ -92,6 +93,8 @@ def sync_sqlite_columns() -> None:
             conn.exec_driver_sql("ALTER TABLE users ADD COLUMN is_email_verified BOOLEAN NOT NULL DEFAULT 0")
         if existing_columns and "token_version" not in existing_columns:
             conn.exec_driver_sql("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0")
+        if existing_columns and "kyc_status" not in existing_columns:
+            conn.exec_driver_sql("ALTER TABLE users ADD COLUMN kyc_status VARCHAR(20) NOT NULL DEFAULT 'not_started'")
         conn.commit()
 
 
@@ -332,6 +335,25 @@ def update_swap(reference: str, request: UpdateSwapStatusRequest, admin: User = 
     db.commit()
     db.refresh(swap)
     return swap_response(swap)
+
+
+@app.get("/v1/admin/users", response_model=list[UserResponse])
+def admin_users(_: User = Depends(admin_user), db: Session = Depends(get_db)) -> list[User]:
+    return db.scalars(select(User).order_by(User.created_at.desc())).all()
+
+
+@app.patch("/v1/admin/users/{user_id}/kyc", response_model=UserResponse)
+def update_kyc_status(user_id: int, request: UpdateKycStatusRequest, admin: User = Depends(admin_user), db: Session = Depends(get_db)) -> User:
+    # Manual review only -- there's no ID-verification vendor wired up yet, this is an admin
+    # marking an account after looking at it themselves. See LAUNCH_CHECKLIST.md.
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.kyc_status = request.status
+    db.add(AuditLog(actor_id=admin.id, action="user.kyc_status_updated", entity_type="user", entity_id=str(user_id), metadata_json={"status": request.status}))
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def find_frontend_dir() -> Optional[Path]:

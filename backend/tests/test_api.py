@@ -276,6 +276,51 @@ def test_admin_update_unknown_swap_returns_404(client):
     assert response.status_code == 404
 
 
+def test_kyc_status_defaults_to_not_started(client):
+    _, _, token = register(client)
+    me = client.get("/v1/auth/me", headers=auth_headers(token))
+    assert me.status_code == 200
+    assert me.json()["kyc_status"] == "not_started"
+
+
+def test_admin_can_list_users_and_update_kyc_status(client):
+    email, _, token = register(client)
+    admin_headers = admin_headers_for(client)
+
+    users = client.get("/v1/admin/users", headers=admin_headers)
+    assert users.status_code == 200
+    matching = [row for row in users.json() if row["email"] == email]
+    assert len(matching) == 1
+    user_id = matching[0]["id"]
+    assert matching[0]["kyc_status"] == "not_started"
+
+    update = client.patch(f"/v1/admin/users/{user_id}/kyc", headers=admin_headers, json={"status": "verified"})
+    assert update.status_code == 200, update.text
+    assert update.json()["kyc_status"] == "verified"
+
+    me = client.get("/v1/auth/me", headers=auth_headers(token))
+    assert me.json()["kyc_status"] == "verified"
+
+
+def test_kyc_endpoints_require_admin_role(client):
+    _, _, token = register(client)
+    headers = auth_headers(token)
+    assert client.get("/v1/admin/users", headers=headers).status_code == 403
+    assert client.patch("/v1/admin/users/1/kyc", headers=headers, json={"status": "verified"}).status_code == 403
+
+
+def test_kyc_status_rejects_invalid_value(client):
+    # Pydantic validates the request body before the endpoint even runs, so this 422s
+    # regardless of whether user id 1 exists.
+    response = client.patch("/v1/admin/users/1/kyc", headers=admin_headers_for(client), json={"status": "not-a-real-status"})
+    assert response.status_code == 422
+
+
+def test_kyc_update_unknown_user_returns_404(client):
+    response = client.patch("/v1/admin/users/999999/kyc", headers=admin_headers_for(client), json={"status": "verified"})
+    assert response.status_code == 404
+
+
 def test_health_check_reports_database_status(client):
     response = client.get("/health")
     assert response.status_code == 200
