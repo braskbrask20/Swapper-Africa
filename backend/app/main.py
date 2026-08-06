@@ -13,7 +13,13 @@ from .security import bearer_scheme, create_access_token, decode_access_token, h
 
 settings = get_settings()
 app = FastAPI(title="Swapper Africa API", version="1.0.0", docs_url="/docs" if settings.environment != "production" else None)
-app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["GET", "POST", "PATCH"], allow_headers=["Authorization", "Content-Type"])
+cors_options = {"allow_origins": settings.cors_origins, "allow_credentials": True, "allow_methods": ["GET", "POST", "PATCH"], "allow_headers": ["Authorization", "Content-Type"]}
+if settings.environment == "development":
+    # Dev convenience only: lets the frontend be tested from another device on the same
+    # network (e.g. a phone) without hand-editing ALLOWED_ORIGINS for every LAN IP. Never
+    # applies when environment=production.
+    cors_options["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$"
+app.add_middleware(CORSMiddleware, **cors_options)
 RATES = {"BTC": 118000, "ETH": 3800, "USDT": 1, "SOL": 180}
 
 

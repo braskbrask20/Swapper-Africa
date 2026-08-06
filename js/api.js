@@ -1,5 +1,10 @@
 const SwapperAPI = (() => {
-  const baseUrl = window.SWAPPER_API_URL || "http://localhost:8000";
+  function resolveDefaultBaseUrl() {
+    const isWebPage = window.location.protocol === "http:" || window.location.protocol === "https:";
+    return isWebPage ? `${window.location.protocol}//${window.location.hostname}:8000` : "http://localhost:8000";
+  }
+
+  const baseUrl = window.SWAPPER_API_URL || resolveDefaultBaseUrl();
   const tokenKey = "swapper_access_token";
 
   function token() { return localStorage.getItem(tokenKey); }
