@@ -1,0 +1,16 @@
+.git
+.gitignore
+.DS_Store
+*.db
+*.db.bak-*
+.env
+backend/.env
+backend/.venv
+backend/__pycache__
+backend/app/__pycache__
+backend/tests/__pycache__
+backend/.pytest_cache
+headless-logs
+scripts
+LAUNCH_CHECKLIST.md
+README.md

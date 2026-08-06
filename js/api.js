@@ -1,7 +1,12 @@
 const SwapperAPI = (() => {
   function resolveDefaultBaseUrl() {
     const isWebPage = window.location.protocol === "http:" || window.location.protocol === "https:";
-    return isWebPage ? `${window.location.protocol}//${window.location.hostname}:8000` : "http://localhost:8000";
+    if (!isWebPage) return "http://localhost:8000";
+    // Local dev serves the frontend on :5500 and the API separately on :8000 (see README) --
+    // guess :8000 only in that specific case. Anywhere else (including a single-service
+    // deploy with no separate API port at all) the API is on this same origin.
+    if (window.location.port === "5500") return `${window.location.protocol}//${window.location.hostname}:8000`;
+    return window.location.origin;
   }
 
   const baseUrl = window.SWAPPER_API_URL || resolveDefaultBaseUrl();

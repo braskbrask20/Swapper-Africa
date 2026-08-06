@@ -1,10 +1,15 @@
+import logging
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Optional
 from uuid import uuid4
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func, select
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 from .config import get_settings
 from .database import Base, SessionLocal, engine, get_db
@@ -15,6 +20,9 @@ from .schemas import (BalanceResponse, CreateSwapRequest, EmailVerificationConfi
 from .security import (bearer_scheme, create_access_token, decode_access_token, generate_token, hash_password,
                        hash_token, verify_password)
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger("swapper")
+
 settings = get_settings()
 app = FastAPI(title="Swapper Africa API", version="1.0.0", docs_url="/docs" if settings.environment != "production" else None)
 cors_options = {"allow_origins": settings.cors_origins, "allow_credentials": True, "allow_methods": ["GET", "POST", "PATCH"], "allow_headers": ["Authorization", "Content-Type"]}
@@ -24,6 +32,16 @@ if settings.environment == "development":
     # applies when environment=production.
     cors_options["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$"
 app.add_middleware(CORSMiddleware, **cors_options)
+
+
+@app.exception_handler(Exception)
+async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+    # Whatever monitoring vendor we eventually pick (see LAUNCH_CHECKLIST.md) plugs in
+    # right here -- this is the one place every unhandled failure already passes through.
+    logger.exception("unhandled_error path=%s method=%s", request.url.path, request.method)
+    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Something went wrong. Please try again."})
+
+
 RATES = {"BTC": 118000, "ETH": 3800, "USDT": 1, "SOL": 180}
 # There is no licensed custody/liquidity provider wired up yet (see LAUNCH_CHECKLIST.md), so
 # every account is seeded with the same demo balances the old browser-local demo used, and swaps
@@ -54,6 +72,7 @@ def rate_limit(key_prefix: str, max_attempts: int, window_seconds: int):
             attempts = [t for t in _rate_limit_state.get(key, []) if now - t < window_seconds]
             if len(attempts) >= max_attempts:
                 retry_after = max(1, int(window_seconds - (now - attempts[0])) + 1)
+                logger.warning("rate_limited key=%s ip=%s", key_prefix, client_ip)
                 raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"Too many attempts. Try again in {retry_after} seconds.", headers={"Retry-After": str(retry_after)})
             attempts.append(now)
             _rate_limit_state[key] = attempts
@@ -154,8 +173,16 @@ def consume_account_token(db: Session, raw_token: str, purpose: str) -> AccountT
 
 
 @app.get("/health")
-def health() -> dict:
-    return {"status": "ok", "environment": settings.environment}
+def health(response: Response, db: Session = Depends(get_db)) -> dict:
+    try:
+        db.execute(text("SELECT 1"))
+        database_status = "ok"
+    except Exception:
+        logger.exception("health_check_database_unreachable")
+        database_status = "unreachable"
+    if database_status != "ok":
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return {"status": "ok" if database_status == "ok" else "degraded", "environment": settings.environment, "database": database_status}
 
 
 @app.post("/v1/auth/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(rate_limit("register", 20, 600))])
@@ -175,6 +202,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)) -> TokenRe
 def login(request: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user = db.scalar(select(User).where(User.email == request.email.lower()))
     if not user or not verify_password(request.password, user.password_hash) or not user.is_active:
+        logger.warning("login_failed email=%s", request.email.lower())
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     return TokenResponse(access_token=create_access_token(user.id, user.role, user.token_version))
 
@@ -304,3 +332,23 @@ def update_swap(reference: str, request: UpdateSwapStatusRequest, admin: User = 
     db.commit()
     db.refresh(swap)
     return swap_response(swap)
+
+
+def find_frontend_dir() -> Optional[Path]:
+    # Two possible layouts depending on how this process was started: the Docker image
+    # (built from repo root, see backend/Dockerfile) copies the frontend alongside `app/`,
+    # one level up from this file; running straight from a repo checkout (`--app-dir backend`)
+    # has it two levels up, at the repo root. Try both; mount nothing if neither has it (e.g.
+    # a stripped-down checkout or build context without the frontend copied) rather than crashing.
+    here = Path(__file__).resolve().parent
+    for candidate in (here.parent, here.parent.parent):
+        if (candidate / "index.html").exists():
+            return candidate
+    return None
+
+
+# Mounted last, after every route above, so explicit API routes always take precedence over
+# this catch-all -- Starlette matches routes in registration order.
+_frontend_dir = find_frontend_dir()
+if _frontend_dir:
+    app.mount("/", StaticFiles(directory=str(_frontend_dir), html=True), name="frontend")

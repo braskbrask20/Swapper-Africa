@@ -242,3 +242,65 @@ def test_admin_endpoints_require_admin_role(client):
     summary = client.get("/v1/admin/summary", headers=admin_headers)
     assert summary.status_code == 200
     assert "users" in summary.json() and "swaps" in summary.json()
+
+
+def admin_headers_for(client):
+    admin_login = client.post("/v1/auth/login", json={
+        "email": os.environ["ADMIN_EMAIL"], "password": os.environ["ADMIN_PASSWORD"],
+    })
+    assert admin_login.status_code == 200
+    return auth_headers(admin_login.json()["access_token"])
+
+
+def test_admin_can_update_swap_status(client):
+    _, _, token = register(client)
+    headers = auth_headers(token)
+    quote = client.post("/v1/quotes", json={"from_asset": "USDT", "to_asset": "ETH", "amount": 200}).json()
+    swap = client.post("/v1/swaps", headers=headers, json={
+        "from_asset": "USDT", "to_asset": "ETH", "amount": 200, "expected_received": quote["received"],
+    }).json()
+
+    update = client.patch(f"/v1/admin/swaps/{swap['reference']}", headers=admin_headers_for(client), json={
+        "status": "failed", "provider_reference": "provider-ref-123",
+    })
+    assert update.status_code == 200, update.text
+    assert update.json()["status"] == "failed"
+
+    # A non-admin can't touch it.
+    forbidden = client.patch(f"/v1/admin/swaps/{swap['reference']}", headers=headers, json={"status": "completed"})
+    assert forbidden.status_code == 403
+
+
+def test_admin_update_unknown_swap_returns_404(client):
+    response = client.patch("/v1/admin/swaps/SWP-DOESNOTEXIST", headers=admin_headers_for(client), json={"status": "completed"})
+    assert response.status_code == 404
+
+
+def test_health_check_reports_database_status(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["database"] == "ok"
+
+
+def test_unhandled_error_returns_generic_response_and_is_logged(client, monkeypatch, caplog):
+    import app.main as main_module
+    from fastapi.testclient import TestClient
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("simulated failure")
+
+    monkeypatch.setattr(main_module, "ensure_balances", boom)
+    _, _, token = register(client)
+
+    # TestClient re-raises exceptions by default even when a registered handler already
+    # produced a response, specifically so tests don't miss real bugs. Here the "bug" is
+    # intentional, so this one client opts out to check what a real caller would receive.
+    with caplog.at_level("ERROR"), TestClient(main_module.app, raise_server_exceptions=False) as quiet_client:
+        response = quiet_client.get("/v1/balances", headers=auth_headers(token))
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Something went wrong. Please try again."}
+    assert "simulated failure" not in response.text
+    assert "unhandled_error" in caplog.text

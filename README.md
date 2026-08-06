@@ -1,6 +1,6 @@
 # Swapper Africa
 
-Swapper Africa is a web client and API foundation for a crypto swap product. The current public pages remain a local-data demo; the `backend/` service is the secure server foundation for authenticated users, provider-backed swap execution, and administrative operations.
+Swapper Africa is a web client and API for a crypto swap product. Signed-in users get real, backend-owned balances and swap history (seeded with demo funds — see `LAUNCH_CHECKLIST.md` for what's still needed before real money moves); signed-out visitors get a local-browser-only demo of the same flow. The `backend/` FastAPI service also serves the frontend directly (see "Deploy to Render" below), so the whole thing is one deployable unit.
 
 ## Local setup
 
@@ -14,11 +14,26 @@ Swapper Africa is a web client and API foundation for a crypto swap product. The
 6. Open `http://localhost:8000/docs` for the API docs, `http://localhost:5500` for the site, and `http://localhost:5500/admin/index.html` for the operations console.
 7. To test from another device on the same Wi-Fi (e.g. a phone), find this computer's LAN IP (`ipconfig getifaddr en0` on macOS) and open `http://<that-ip>:5500` on the other device — the frontend auto-detects the matching API host, no config needed.
 
-## Production path
+## Deploy to Render
 
-Before launch, move to managed PostgreSQL and apply `backend/migrations/001_initial.sql`. Deploy the API using the included Dockerfile, configure a strong secret and explicit CORS origins, and use HTTPS only.
+The backend serves the frontend directly (`backend/app/main.py` mounts the frontend as static files after every API route), so this is a single Render **Web Service** plus a **PostgreSQL** database — one URL, no separate frontend host, no CORS to configure.
 
-The API intentionally does not custody funds or execute blockchain transactions on its own. A production release still requires an approved licensed liquidity/custody provider, KYC/AML and sanctions screening, transaction monitoring, jurisdiction-specific legal review, rate limiting, error monitoring, backups, a privacy policy, terms of service, and mobile-store compliance materials.
+**Fastest path — Blueprint** (`render.yaml` at the repo root describes both pieces):
+
+1. Push this repo to GitHub (Render deploys from a connected repo).
+2. In Render: **New +** → **Blueprint** → select this repo → Render reads `render.yaml` and shows you the web service + database it's about to create.
+3. It'll prompt for `ADMIN_EMAIL` and `ADMIN_PASSWORD` directly (marked `sync: false` in the blueprint, so they're typed straight into Render's dashboard — never shared anywhere else). Use a real email and a strong password; this becomes the bootstrap admin account (`/admin/index.html`).
+4. Click **Apply**. Render builds the Docker image, provisions Postgres, wires `DATABASE_URL` automatically, and generates `JWT_SECRET` for you.
+5. Once it's live, note the actual assigned URL (Render appends a random suffix if `swapper-africa` is already taken elsewhere, e.g. `swapper-africa-a1b2.onrender.com`). If it differs from the `ALLOWED_ORIGINS` value baked into `render.yaml`, update that env var in the dashboard to match — the service redeploys automatically on env var changes. (This matters less than usual since the frontend and API are same-origin, but it's still correct to keep it accurate.)
+6. Visit `/health` on the deployed URL — should return `{"status":"ok","database":"ok",...}`. That's Render's own health check path too (set via `healthCheckPath` in the blueprint), so Render will consider the deploy unhealthy if the database isn't reachable.
+
+If the Blueprint doesn't parse (Render's schema does evolve — worth a quick check against their current Blueprint docs if so), the equivalent manual steps: create a Postgres instance first, then a Web Service pointed at this repo with **Root/Build Context = repo root**, **Dockerfile path = `backend/Dockerfile`**, and set the same env vars (`ENVIRONMENT=production`, `DATABASE_URL` = the Postgres instance's internal connection string, `JWT_SECRET` = a long random value e.g. `openssl rand -hex 32`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ALLOWED_ORIGINS` = the service's URL) plus health check path `/health`.
+
+No manual migration step is needed on first deploy — the app creates its full schema on startup against an empty database. The numbered files in `backend/migrations/` matter later, for evolving an *existing* production database.
+
+**Known limitation, confirm before relying on it**: Render's free Postgres tier has historically been time-limited (expires after a set number of days, then needs a paid plan to keep the data) — check the current terms in Render's dashboard at signup, since pricing/tier details change.
+
+**Before this handles real money**, see `LAUNCH_CHECKLIST.md` in full — this deployment gets the app *live*, it doesn't by itself satisfy custody, KYC/AML, or licensing requirements. The API intentionally does not custody funds or execute blockchain transactions on its own.
 
 ## Core endpoints
 
