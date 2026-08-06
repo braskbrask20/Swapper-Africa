@@ -1,14 +1,11 @@
 const SwapperAPI = (() => {
-  const baseUrl = window.SWAPPER_API_URL || "http://127.0.0.1:8000";
+  const baseUrl = window.SWAPPER_API_URL || "http://localhost:8000";
   const tokenKey = "swapper_access_token";
-  const profileKey = "swapper_profile";
-  let profileCache = null;
 
   function token() { return localStorage.getItem(tokenKey); }
   function isAuthenticated() { return Boolean(token()); }
   function setToken(value) { localStorage.setItem(tokenKey, value); }
-  function clearSession() { localStorage.removeItem(tokenKey); localStorage.removeItem(profileKey); profileCache = null; }
-  function signOut() { clearSession(); updateHeader(); }
+  function signOut() { localStorage.removeItem(tokenKey); localStorage.removeItem("swapper_profile"); }
 
   async function request(path, options = {}) {
     const headers = { "Content-Type": "application/json", ...options.headers };
@@ -19,12 +16,10 @@ const SwapperAPI = (() => {
     } catch (error) {
       throw new Error("We could not reach Swapper Africa. Please try again shortly.");
     }
-
-    let body = null;
-    try { body = await response.json(); } catch { body = null; }
+    const body = await response.json();
     if (!response.ok) {
-      if (response.status === 401) clearSession();
-      throw new Error(body?.detail || "Something went wrong. Please try again.");
+      if (response.status === 401) signOut();
+      throw new Error(body.detail || "Something went wrong. Please try again.");
     }
     return body;
   }
@@ -33,56 +28,57 @@ const SwapperAPI = (() => {
     const response = await request(path, { method: "POST", body: JSON.stringify(payload) });
     setToken(response.access_token);
     const profile = await request("/v1/auth/me");
-    localStorage.setItem(profileKey, JSON.stringify(profile));
-    profileCache = profile;
-    updateHeader();
+    localStorage.setItem("swapper_profile", JSON.stringify(profile));
     return profile;
   }
 
-  async function getProfile(reload = false) {
-    if (!isAuthenticated()) return null;
-    if (!profileCache && !reload) {
-      const stored = localStorage.getItem(profileKey);
-      if (stored) {
-        try { profileCache = JSON.parse(stored); } catch {
-          profileCache = null;
-        }
-      }
-    }
-    if (!profileCache || reload) {
-      profileCache = await request("/v1/auth/me");
-      localStorage.setItem(profileKey, JSON.stringify(profileCache));
-    }
-    return profileCache;
-  }
-
-  async function quote(from, to, amount) {
-    return await request("/v1/quotes", { method: "POST", body: JSON.stringify({ from_asset: from, to_asset: to, amount }) });
-  }
-
-  async function createSwap(from, to, amount, expectedReceived) {
-    return await request("/v1/swaps", { method: "POST", body: JSON.stringify({ from_asset: from, to_asset: to, amount, expected_received: expectedReceived }) });
-  }
-
-  async function getSwaps() {
-    return await request("/v1/swaps");
-  }
-
   function updateHeader() {
-    const actions = Array.from(document.querySelectorAll(".header-action[data-auth-action]"));
-    if (!actions.length) return;
-    actions.forEach((action) => {
+    const action = document.querySelector(".header-action[data-auth-action]");
+    if (!action) return;
+    if (isAuthenticated()) {
+      action.textContent = "My activity";
+      action.href = action.dataset.dashboardHref || "pages/dashboard.html";
+    } else {
+      action.textContent = "Sign in";
+      action.href = action.dataset.authHref || "pages/auth.html";
+    }
+  }
+
+  function profile() {
+    try {
+      return JSON.parse(localStorage.getItem("swapper_profile"));
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function renderAuthStatus() {
+    document.querySelectorAll("[data-auth-status]").forEach((el) => {
+      const authHref = el.dataset.authHref || "auth.html";
+      const compact = el.dataset.authStatus === "compact";
       if (isAuthenticated()) {
-        action.textContent = "My activity";
-        action.href = action.dataset.dashboardHref || "pages/dashboard.html";
+        const account = profile();
+        const name = account && account.full_name ? account.full_name.split(" ")[0] : "Account";
+        el.hidden = false;
+        el.innerHTML = `<span class="auth-name">Hi, ${name}</span><button class="text-link auth-signout" type="button">Sign out</button>`;
+        el.querySelector(".auth-signout").addEventListener("click", () => {
+          signOut();
+          window.location.href = authHref;
+        });
+      } else if (compact) {
+        el.hidden = true;
+        el.innerHTML = "";
       } else {
-        action.textContent = "Sign in";
-        action.href = action.dataset.authHref || "pages/auth.html";
+        el.hidden = false;
+        el.innerHTML = `<a class="text-link" href="${authHref}">Sign in</a>`;
       }
     });
   }
 
-  return { baseUrl, token, isAuthenticated, signOut, request, authenticate, updateHeader, getProfile, quote, createSwap, getSwaps };
+  return { baseUrl, token, isAuthenticated, signOut, request, authenticate, updateHeader, renderAuthStatus };
 })();
 
-document.addEventListener("DOMContentLoaded", SwapperAPI.updateHeader);
+document.addEventListener("DOMContentLoaded", () => {
+  SwapperAPI.updateHeader();
+  SwapperAPI.renderAuthStatus();
+});

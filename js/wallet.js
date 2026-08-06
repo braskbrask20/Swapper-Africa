@@ -16,9 +16,19 @@ function createDemoUser() {
   };
 }
 
+function getUserDataKey() {
+  if (typeof SwapperAPI === "undefined" || !SwapperAPI.isAuthenticated()) return "userData";
+  try {
+    const account = JSON.parse(localStorage.getItem("swapper_profile"));
+    return account && account.id ? `userData:${account.id}` : "userData";
+  } catch (error) {
+    return "userData";
+  }
+}
+
 function getUser() {
   try {
-    const savedUser = JSON.parse(localStorage.getItem("userData"));
+    const savedUser = JSON.parse(localStorage.getItem(getUserDataKey()));
     if (savedUser && savedUser.balance && Array.isArray(savedUser.transactions)) {
       return savedUser;
     }
@@ -32,7 +42,7 @@ function getUser() {
 }
 
 function saveUser(user) {
-  localStorage.setItem("userData", JSON.stringify(user));
+  localStorage.setItem(getUserDataKey(), JSON.stringify(user));
 }
 
 function resetDemoUser() {

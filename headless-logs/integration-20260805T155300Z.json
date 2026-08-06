@@ -1,0 +1,72 @@
+{
+  "run_at": "20260805T155300Z",
+  "email": "cli+1785945180@example.com",
+  "steps": [
+    {
+      "step": "register",
+      "status": 201,
+      "body": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwicm9sZSI6ImN1c3RvbWVyIiwiZXhwIjoxNzg1OTQ2OTgxfQ.iunDTi25Ojw9Gcik5MCC5jv9u3Kcqe1TWbYkS5nge-E",
+        "token_type": "bearer"
+      }
+    },
+    {
+      "step": "login",
+      "status": 200,
+      "body": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwicm9sZSI6ImN1c3RvbWVyIiwiZXhwIjoxNzg1OTQ2OTgxfQ.iunDTi25Ojw9Gcik5MCC5jv9u3Kcqe1TWbYkS5nge-E",
+        "token_type": "bearer"
+      }
+    },
+    {
+      "step": "profile_before",
+      "status": 200,
+      "body": {
+        "id": 3,
+        "email": "cli+1785945180@example.com",
+        "full_name": "CLI Runner",
+        "role": "customer",
+        "is_active": true,
+        "balances": {
+          "BTC": 1.0,
+          "ETH": 5.0,
+          "USDT": 10000.0,
+          "SOL": 20.0
+        },
+        "created_at": "2026-08-05T15:53:00"
+      }
+    },
+    {
+      "step": "quote",
+      "status": 200,
+      "body": {
+        "rate": 118000.0,
+        "fee": 2.95,
+        "received": 1177.05,
+        "expires_at": "2026-08-05T15:54:01.393072Z"
+      }
+    },
+    {
+      "step": "create_swap",
+      "error": "no_quote_id"
+    },
+    {
+      "step": "profile_after",
+      "status": 200,
+      "body": {
+        "id": 3,
+        "email": "cli+1785945180@example.com",
+        "full_name": "CLI Runner",
+        "role": "customer",
+        "is_active": true,
+        "balances": {
+          "BTC": 1.0,
+          "ETH": 5.0,
+          "USDT": 10000.0,
+          "SOL": 20.0
+        },
+        "created_at": "2026-08-05T15:53:00"
+      }
+    }
+  ]
+}

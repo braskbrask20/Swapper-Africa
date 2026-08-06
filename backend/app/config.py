@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,7 +17,24 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> list[str]:
-        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+        raw = self.allowed_origins.strip()
+        if raw == "*":
+            return ["*"]
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+    @property
+    def resolved_database_url(self) -> str:
+        raw = self.database_url.strip()
+        if raw.startswith("sqlite:///"):
+            db_path = raw[len("sqlite:///"):]
+            if os.path.isabs(db_path):
+                return raw
+            cwd_path = os.path.abspath(os.path.join(os.getcwd(), db_path))
+            if os.path.exists(cwd_path):
+                return f"sqlite:///{cwd_path}"
+            config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", db_path))
+            return f"sqlite:///{config_path}"
+        return raw
 
 
 @lru_cache

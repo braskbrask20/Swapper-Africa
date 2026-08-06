@@ -1,0 +1,35 @@
+{
+  "run_at": "20260805T155051Z",
+  "email": "cli+1785945051@example.com",
+  "steps": [
+    {
+      "step": "register",
+      "status": 201,
+      "body": "{\"access_token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwicm9sZSI6ImN1c3RvbWVyIiwiZXhwIjoxNzg1OTQ2ODUyfQ.xidOeTw3gmCFnqOByBFns0dNeJPCCGhQ1MiY9ntjtKc\",\"token_type\":\"bearer\"}"
+    },
+    {
+      "step": "login",
+      "status": 200,
+      "body": "{\"access_token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwicm9sZSI6ImN1c3RvbWVyIiwiZXhwIjoxNzg1OTQ2ODUyfQ.xidOeTw3gmCFnqOByBFns0dNeJPCCGhQ1MiY9ntjtKc\",\"token_type\":\"bearer\"}"
+    },
+    {
+      "step": "profile_before",
+      "status": 401,
+      "body": "{\"detail\":\"Authentication required\"}"
+    },
+    {
+      "step": "quote",
+      "status": 200,
+      "body": "{\"rate\":118000.0,\"fee\":2.95,\"received\":1177.05,\"expires_at\":\"2026-08-05T15:51:52.239324Z\"}"
+    },
+    {
+      "step": "create_swap",
+      "error": "no_quote_id"
+    },
+    {
+      "step": "profile_after",
+      "status": 401,
+      "body": "{\"detail\":\"Authentication required\"}"
+    }
+  ]
+}
