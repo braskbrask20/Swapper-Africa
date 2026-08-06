@@ -25,9 +25,33 @@ class UserResponse(BaseModel):
     full_name: str
     role: str
     is_active: bool
+    is_email_verified: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str = Field(min_length=12, max_length=128)
+
+
+class PasswordResetResponse(BaseModel):
+    detail: str
+    dev_reset_token: Optional[str] = None
+
+
+class EmailVerificationRequestResponse(BaseModel):
+    detail: str
+    dev_verification_token: Optional[str] = None
+
+
+class EmailVerificationConfirm(BaseModel):
+    token: str
 
 
 class QuoteRequest(BaseModel):

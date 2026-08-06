@@ -29,12 +29,21 @@ const SwapperAPI = (() => {
     return body;
   }
 
-  async function authenticate(path, payload) {
-    const response = await request(path, { method: "POST", body: JSON.stringify(payload) });
-    setToken(response.access_token);
+  async function completeSession(tokenResponse) {
+    setToken(tokenResponse.access_token);
     const profile = await request("/v1/auth/me");
     localStorage.setItem("swapper_profile", JSON.stringify(profile));
     return profile;
+  }
+
+  async function authenticate(path, payload) {
+    const response = await request(path, { method: "POST", body: JSON.stringify(payload) });
+    return completeSession(response);
+  }
+
+  async function signOutEverywhere() {
+    const response = await request("/v1/auth/sign-out-everywhere", { method: "POST" });
+    setToken(response.access_token);
   }
 
   function updateHeader() {
@@ -65,10 +74,21 @@ const SwapperAPI = (() => {
         const account = profile();
         const name = account && account.full_name ? account.full_name.split(" ")[0] : "Account";
         el.hidden = false;
-        el.innerHTML = `<span class="auth-name">Hi, ${name}</span><button class="text-link auth-signout" type="button">Sign out</button>`;
+        el.innerHTML = `<span class="auth-name">Hi, ${name}</span><button class="text-link auth-signout-everywhere" type="button">Sign out everywhere</button><button class="text-link auth-signout" type="button">Sign out</button>`;
         el.querySelector(".auth-signout").addEventListener("click", () => {
           signOut();
           window.location.href = authHref;
+        });
+        el.querySelector(".auth-signout-everywhere").addEventListener("click", async (event) => {
+          const button = event.target;
+          button.disabled = true;
+          try {
+            await signOutEverywhere();
+            signOut();
+            window.location.href = authHref;
+          } catch (error) {
+            button.disabled = false;
+          }
         });
       } else if (compact) {
         el.hidden = true;
@@ -80,7 +100,7 @@ const SwapperAPI = (() => {
     });
   }
 
-  return { baseUrl, token, isAuthenticated, signOut, request, authenticate, updateHeader, renderAuthStatus };
+  return { baseUrl, token, isAuthenticated, signOut, signOutEverywhere, request, authenticate, completeSession, updateHeader, renderAuthStatus };
 })();
 
 document.addEventListener("DOMContentLoaded", () => {

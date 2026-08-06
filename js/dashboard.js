@@ -45,6 +45,42 @@ document.getElementById("exportActivity").addEventListener("click", () => {
   URL.revokeObjectURL(link.href);
 });
 
+async function initVerificationBanner() {
+  if (!isSignedIn()) return;
+  try {
+    const profile = await SwapperAPI.request("/v1/auth/me");
+    localStorage.setItem("swapper_profile", JSON.stringify(profile));
+    if (profile.is_email_verified) return;
+
+    const banner = document.getElementById("verifyBanner");
+    const bannerText = document.getElementById("verifyBannerText");
+    const resendButton = document.getElementById("resendVerification");
+    banner.hidden = false;
+    resendButton.addEventListener("click", async () => {
+      resendButton.disabled = true;
+      try {
+        const response = await SwapperAPI.request("/v1/auth/verify-email/request", { method: "POST" });
+        let text = response.detail;
+        if (response.dev_verification_token) {
+          const link = `${window.location.origin}${window.location.pathname.replace("dashboard.html", "")}auth.html?mode=verify&token=${encodeURIComponent(response.dev_verification_token)}`;
+          text = `No email provider is connected yet (dev mode) — verify here: `;
+          bannerText.textContent = text;
+          const anchor = document.createElement("a");
+          anchor.href = link;
+          anchor.textContent = link;
+          bannerText.appendChild(anchor);
+          return;
+        }
+        bannerText.textContent = text;
+      } finally {
+        resendButton.disabled = false;
+      }
+    });
+  } catch (error) {
+    // Non-critical -- skip the banner rather than block the page on it.
+  }
+}
+
 async function init() {
   try {
     dashboardUser = await getAccountSnapshot();
@@ -55,6 +91,7 @@ async function init() {
     emptyActivity.hidden = false;
     emptyActivity.textContent = "Could not load your activity. Please refresh to try again.";
   }
+  initVerificationBanner();
 }
 
 init();

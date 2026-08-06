@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt
@@ -18,10 +20,20 @@ def verify_password(password: str, password_hash: str) -> bool:
     return password_context.verify(password, password_hash)
 
 
-def create_access_token(user_id: int, role: str) -> str:
+def create_access_token(user_id: int, role: str, token_version: int) -> str:
     settings = get_settings()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_minutes)
-    return jwt.encode({"sub": str(user_id), "role": role, "exp": expires_at}, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    return jwt.encode({"sub": str(user_id), "role": role, "ver": token_version, "exp": expires_at}, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def generate_token() -> str:
+    """Raw single-use token for password reset / email verification links."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(raw_token: str) -> str:
+    """Only the hash is stored, same principle as password hashing: a DB leak can't be replayed."""
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
 def decode_access_token(credentials: Optional[HTTPAuthorizationCredentials] = None) -> dict:

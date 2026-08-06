@@ -15,11 +15,12 @@ if TEST_DB_PATH.exists():
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import app, reset_rate_limits
 
 
 @pytest.fixture()
 def client():
+    reset_rate_limits()
     with TestClient(app) as test_client:
         yield test_client
 

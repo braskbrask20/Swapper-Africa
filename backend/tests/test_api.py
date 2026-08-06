@@ -138,6 +138,97 @@ def test_swaps_scoped_per_user(client):
     assert len(client.get("/v1/swaps", headers=headers_b).json()) == 0
 
 
+def test_password_reset_flow_and_session_revocation(client):
+    email, password, old_token = register(client)
+    old_headers = auth_headers(old_token)
+    assert client.get("/v1/auth/me", headers=old_headers).status_code == 200
+
+    request_reset = client.post("/v1/auth/password-reset/request", json={"email": email})
+    assert request_reset.status_code == 200
+    reset_token = request_reset.json()["dev_reset_token"]
+    assert reset_token
+
+    new_password = "a-different-strong-password"
+    confirm = client.post("/v1/auth/password-reset/confirm", json={"token": reset_token, "new_password": new_password})
+    assert confirm.status_code == 200, confirm.text
+    new_token = confirm.json()["access_token"]
+
+    # Old sessions must be dead the instant the password changes.
+    assert client.get("/v1/auth/me", headers=old_headers).status_code == 401
+    # The reset itself signs the user back in with a fresh, valid token.
+    assert client.get("/v1/auth/me", headers=auth_headers(new_token)).status_code == 200
+    # Old password no longer works; new one does.
+    assert client.post("/v1/auth/login", json={"email": email, "password": password}).status_code == 401
+    assert client.post("/v1/auth/login", json={"email": email, "password": new_password}).status_code == 200
+
+
+def test_password_reset_request_unknown_email_is_generic(client):
+    response = client.post("/v1/auth/password-reset/request", json={"email": "nobody-here@example.com"})
+    assert response.status_code == 200
+    assert "dev_reset_token" not in response.json() or response.json().get("dev_reset_token") is None
+
+
+def test_password_reset_token_single_use(client):
+    email, _, _ = register(client)
+    reset_token = client.post("/v1/auth/password-reset/request", json={"email": email}).json()["dev_reset_token"]
+
+    first = client.post("/v1/auth/password-reset/confirm", json={"token": reset_token, "new_password": "first-new-password-123"})
+    assert first.status_code == 200
+
+    second = client.post("/v1/auth/password-reset/confirm", json={"token": reset_token, "new_password": "second-new-password-123"})
+    assert second.status_code == 400
+
+
+def test_password_reset_invalid_token_rejected(client):
+    response = client.post("/v1/auth/password-reset/confirm", json={"token": "not-a-real-token", "new_password": "whatever-password-123"})
+    assert response.status_code == 400
+
+
+def test_email_verification_flow(client):
+    _, _, token = register(client)
+    headers = auth_headers(token)
+
+    me = client.get("/v1/auth/me", headers=headers).json()
+    assert me["is_email_verified"] is False
+
+    request_verify = client.post("/v1/auth/verify-email/request", headers=headers)
+    assert request_verify.status_code == 200
+    verify_token = request_verify.json()["dev_verification_token"]
+    assert verify_token
+
+    confirm = client.post("/v1/auth/verify-email/confirm", json={"token": verify_token})
+    assert confirm.status_code == 200
+    assert confirm.json()["is_email_verified"] is True
+
+    me_after = client.get("/v1/auth/me", headers=headers).json()
+    assert me_after["is_email_verified"] is True
+
+    already_verified = client.post("/v1/auth/verify-email/request", headers=headers)
+    assert already_verified.status_code == 200
+    assert "already verified" in already_verified.json()["detail"].lower()
+
+
+def test_sign_out_everywhere_revokes_old_token(client):
+    _, _, token_a = register(client)
+    headers_a = auth_headers(token_a)
+
+    sign_out_everywhere = client.post("/v1/auth/sign-out-everywhere", headers=headers_a)
+    assert sign_out_everywhere.status_code == 200
+    new_token = sign_out_everywhere.json()["access_token"]
+
+    assert client.get("/v1/auth/me", headers=headers_a).status_code == 401
+    assert client.get("/v1/auth/me", headers=auth_headers(new_token)).status_code == 200
+
+
+def test_rate_limit_trips_after_threshold(client):
+    for _ in range(10):
+        response = client.post("/v1/auth/password-reset/request", json={"email": "rate-limit-probe@example.com"})
+        assert response.status_code == 200
+    limited = client.post("/v1/auth/password-reset/request", json={"email": "rate-limit-probe@example.com"})
+    assert limited.status_code == 429
+    assert "Retry-After" in limited.headers
+
+
 def test_admin_endpoints_require_admin_role(client):
     _, _, customer_token = register(client)
     assert client.get("/v1/admin/summary", headers=auth_headers(customer_token)).status_code == 403

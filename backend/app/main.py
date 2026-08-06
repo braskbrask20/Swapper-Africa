@@ -1,15 +1,19 @@
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from .config import get_settings
 from .database import Base, SessionLocal, engine, get_db
-from .models import AuditLog, Balance, Swap, User
-from .schemas import (BalanceResponse, CreateSwapRequest, LoginRequest, QuoteRequest, QuoteResponse,
-                      RegisterRequest, SwapResponse, TokenResponse, UpdateSwapStatusRequest, UserResponse)
-from .security import bearer_scheme, create_access_token, decode_access_token, hash_password, verify_password
+from .models import AccountToken, AuditLog, Balance, Swap, User
+from .schemas import (BalanceResponse, CreateSwapRequest, EmailVerificationConfirm, EmailVerificationRequestResponse,
+                      LoginRequest, PasswordResetConfirm, PasswordResetRequest, PasswordResetResponse, QuoteRequest,
+                      QuoteResponse, RegisterRequest, SwapResponse, TokenResponse, UpdateSwapStatusRequest, UserResponse)
+from .security import (bearer_scheme, create_access_token, decode_access_token, generate_token, hash_password,
+                       hash_token, verify_password)
 
 settings = get_settings()
 app = FastAPI(title="Swapper Africa API", version="1.0.0", docs_url="/docs" if settings.environment != "production" else None)
@@ -25,11 +29,57 @@ RATES = {"BTC": 118000, "ETH": 3800, "USDT": 1, "SOL": 180}
 # every account is seeded with the same demo balances the old browser-local demo used, and swaps
 # settle instantly instead of sitting in "pending". Real balances land when that provider does.
 DEMO_STARTING_BALANCES = {"BTC": 1, "ETH": 5, "USDT": 10000, "SOL": 20}
+RESET_TOKEN_MINUTES = 30
+VERIFICATION_TOKEN_MINUTES = 60 * 24
+
+_rate_limit_state: dict[str, list[float]] = {}
+_rate_limit_lock = threading.Lock()
+
+
+def reset_rate_limits() -> None:
+    """Test-only: clears in-memory rate-limit counters so tests don't leak state into each other."""
+    with _rate_limit_lock:
+        _rate_limit_state.clear()
+
+
+def rate_limit(key_prefix: str, max_attempts: int, window_seconds: int):
+    # Single-instance, in-memory sliding window keyed by client IP. A multi-instance
+    # production deployment would need a shared store (e.g. Redis) -- a deployment-time
+    # concern, not worth building before there's more than one instance to coordinate.
+    def dependency(request: Request) -> None:
+        client_ip = request.client.host if request.client else "unknown"
+        key = f"{key_prefix}:{client_ip}"
+        now = time.monotonic()
+        with _rate_limit_lock:
+            attempts = [t for t in _rate_limit_state.get(key, []) if now - t < window_seconds]
+            if len(attempts) >= max_attempts:
+                retry_after = max(1, int(window_seconds - (now - attempts[0])) + 1)
+                raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"Too many attempts. Try again in {retry_after} seconds.", headers={"Retry-After": str(retry_after)})
+            attempts.append(now)
+            _rate_limit_state[key] = attempts
+    return dependency
+
+
+def sync_sqlite_columns() -> None:
+    # Base.metadata.create_all only creates missing tables, it never alters an existing one --
+    # fine for Postgres (numbered migrations under backend/migrations/ own that there), but local
+    # SQLite dev has no migration runner. Bring an existing dev DB's `users` table up to date
+    # in place so accounts created before this phase keep working without a manual step.
+    if not settings.database_url.startswith("sqlite"):
+        return
+    with engine.connect() as conn:
+        existing_columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(users)").fetchall()}
+        if existing_columns and "is_email_verified" not in existing_columns:
+            conn.exec_driver_sql("ALTER TABLE users ADD COLUMN is_email_verified BOOLEAN NOT NULL DEFAULT 0")
+        if existing_columns and "token_version" not in existing_columns:
+            conn.exec_driver_sql("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0")
+        conn.commit()
 
 
 @app.on_event("startup")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
+    sync_sqlite_columns()
     with SessionLocal() as db:
         admin = db.scalar(select(User).where(User.email == settings.admin_email.lower()))
         if not admin:
@@ -42,6 +92,8 @@ def current_user(credentials=Depends(bearer_scheme), db: Session = Depends(get_d
     user = db.get(User, int(payload["sub"]))
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account unavailable")
+    if payload.get("ver") != user.token_version:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
     return user
 
 
@@ -79,12 +131,34 @@ def ensure_balances(db: Session, user: User) -> dict[str, Balance]:
     return rows
 
 
+def _aware(value: datetime) -> datetime:
+    # SQLite drops tzinfo on round-trip even for DateTime(timezone=True) columns; Postgres
+    # doesn't. Normalize to UTC-aware either way before doing datetime arithmetic on it.
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def issue_account_token(db: Session, user: User, purpose: str, minutes_valid: int) -> str:
+    raw_token = generate_token()
+    db.add(AccountToken(user_id=user.id, purpose=purpose, token_hash=hash_token(raw_token), expires_at=datetime.now(timezone.utc) + timedelta(minutes=minutes_valid)))
+    db.commit()
+    return raw_token
+
+
+def consume_account_token(db: Session, raw_token: str, purpose: str) -> AccountToken:
+    token_row = db.scalar(select(AccountToken).where(AccountToken.token_hash == hash_token(raw_token), AccountToken.purpose == purpose))
+    if not token_row or token_row.used_at or _aware(token_row.expires_at) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="This link is invalid or has expired.")
+    token_row.used_at = datetime.now(timezone.utc)
+    db.commit()
+    return token_row
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "environment": settings.environment}
 
 
-@app.post("/v1/auth/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@app.post("/v1/auth/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(rate_limit("register", 20, 600))])
 def register(request: RegisterRequest, db: Session = Depends(get_db)) -> TokenResponse:
     email = request.email.lower()
     if db.scalar(select(User).where(User.email == email)):
@@ -94,20 +168,82 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)) -> TokenRe
     db.flush()
     db.add(AuditLog(actor_id=user.id, action="user.registered", entity_type="user", entity_id=str(user.id)))
     db.commit()
-    return TokenResponse(access_token=create_access_token(user.id, user.role))
+    return TokenResponse(access_token=create_access_token(user.id, user.role, user.token_version))
 
 
-@app.post("/v1/auth/login", response_model=TokenResponse)
+@app.post("/v1/auth/login", response_model=TokenResponse, dependencies=[Depends(rate_limit("login", 20, 600))])
 def login(request: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user = db.scalar(select(User).where(User.email == request.email.lower()))
     if not user or not verify_password(request.password, user.password_hash) or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
-    return TokenResponse(access_token=create_access_token(user.id, user.role))
+    return TokenResponse(access_token=create_access_token(user.id, user.role, user.token_version))
 
 
 @app.get("/v1/auth/me", response_model=UserResponse)
 def me(user: User = Depends(current_user)) -> User:
     return user
+
+
+@app.post("/v1/auth/password-reset/request", response_model=PasswordResetResponse, dependencies=[Depends(rate_limit("password-reset-request", 10, 600))])
+def request_password_reset(request: PasswordResetRequest, db: Session = Depends(get_db)) -> PasswordResetResponse:
+    detail = "If that email has an account, a reset link has been sent."
+    user = db.scalar(select(User).where(User.email == request.email.lower()))
+    if not user:
+        return PasswordResetResponse(detail=detail)
+    raw_token = issue_account_token(db, user, "password_reset", RESET_TOKEN_MINUTES)
+    # send_reset_email(user, raw_token) is the seam for real delivery once a provider is
+    # chosen (LAUNCH_CHECKLIST.md). Until then, dev mode surfaces the token directly so the
+    # whole flow is testable without a live inbox.
+    if settings.environment != "production":
+        print(f"[dev] password reset token for {user.email}: {raw_token}")
+        return PasswordResetResponse(detail=detail, dev_reset_token=raw_token)
+    return PasswordResetResponse(detail=detail)
+
+
+@app.post("/v1/auth/password-reset/confirm", response_model=TokenResponse)
+def confirm_password_reset(request: PasswordResetConfirm, db: Session = Depends(get_db)) -> TokenResponse:
+    token_row = consume_account_token(db, request.token, "password_reset")
+    user = db.get(User, token_row.user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=400, detail="This link is invalid or has expired.")
+    user.password_hash = hash_password(request.new_password)
+    user.token_version += 1
+    db.add(AuditLog(actor_id=user.id, action="user.password_reset", entity_type="user", entity_id=str(user.id)))
+    db.commit()
+    db.refresh(user)
+    return TokenResponse(access_token=create_access_token(user.id, user.role, user.token_version))
+
+
+@app.post("/v1/auth/verify-email/request", response_model=EmailVerificationRequestResponse, dependencies=[Depends(rate_limit("verify-email-request", 10, 600))])
+def request_email_verification(user: User = Depends(current_user), db: Session = Depends(get_db)) -> EmailVerificationRequestResponse:
+    if user.is_email_verified:
+        return EmailVerificationRequestResponse(detail="Your email is already verified.")
+    raw_token = issue_account_token(db, user, "email_verification", VERIFICATION_TOKEN_MINUTES)
+    if settings.environment != "production":
+        print(f"[dev] email verification token for {user.email}: {raw_token}")
+        return EmailVerificationRequestResponse(detail="Verification email sent.", dev_verification_token=raw_token)
+    return EmailVerificationRequestResponse(detail="Verification email sent.")
+
+
+@app.post("/v1/auth/verify-email/confirm", response_model=UserResponse)
+def confirm_email_verification(request: EmailVerificationConfirm, db: Session = Depends(get_db)) -> User:
+    token_row = consume_account_token(db, request.token, "email_verification")
+    user = db.get(User, token_row.user_id)
+    if not user:
+        raise HTTPException(status_code=400, detail="This link is invalid or has expired.")
+    user.is_email_verified = True
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.post("/v1/auth/sign-out-everywhere", response_model=TokenResponse)
+def sign_out_everywhere(user: User = Depends(current_user), db: Session = Depends(get_db)) -> TokenResponse:
+    user.token_version += 1
+    db.add(AuditLog(actor_id=user.id, action="user.sign_out_everywhere", entity_type="user", entity_id=str(user.id)))
+    db.commit()
+    db.refresh(user)
+    return TokenResponse(access_token=create_access_token(user.id, user.role, user.token_version))
 
 
 @app.post("/v1/quotes", response_model=QuoteResponse)
