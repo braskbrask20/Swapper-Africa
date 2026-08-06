@@ -1,4 +1,4 @@
-const API_URL = window.SWAPPER_API_URL || "http://localhost:8000";
+const API_URL = SwapperAPI.baseUrl;
 const token = sessionStorage.getItem("swapper_admin_token");
 
 async function api(path, options = {}) {
